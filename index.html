@@ -478,9 +478,7 @@ function homeView(quiet){
     ${hotFirst ? inboxList() : ''}
     <div class="modes">
       <button class="mcard live" data-go="create"><b>EN VIVO</b><span>Partida rápida, todos a la vez</span></button>
-      <button class="mcard" data-go="retoNew"><b>RETO</b><span>Las mismas palabras, cada uno a su ritmo</span></button>
-      <button class="mcard" data-go="duelNew"><b>DUELO</b><span>Os ponéis palabras por turnos</span></button>
-      <button class="mcard" data-go="daily"><b>PALABRA DEL DÍA</b><span>${playedToday() ? 'Hoy ya jugaste ✓' : 'Una al día, con tu grupo'}</span></button>
+      <button class="mcard" data-go="duelNew"><b>DUELO</b><span>Contra un amigo, cada uno a su ritmo</span></button>
     </div>
     ${canInstall() && !store.get('ahorcado-hide-install', false) ? `<div class="installbar"><button data-install>${PLUS_GLYPH}<span><b>Instala la app</b><small>Juega desde tu pantalla de inicio</small></span></button><button data-hideinstall aria-label="Ocultar">×</button></div>` : ''}
     <div style="display:flex;flex-direction:column;gap:6px;flex:none">
@@ -551,7 +549,7 @@ function joinView(){
     <div class="top">${backBtn()}<span style="font-size:18px">Unirse</span><span style="width:44px"></span></div>
     <h2 class="display" style="font-size:54px">ESCRIBE<br>EL CÓDIGO</h2>
     <div class="field"><label class="label" for="code">Código</label><input class="input" id="code" autocomplete="off" autocapitalize="characters" placeholder="TACO·42" value="${esc(R.pendingJoin ? fmtCode(R.pendingJoin) : '')}" style="font-family:var(--display);font-size:30px;letter-spacing:1px;height:68px"></div>
-    <span style="font-size:14px;color:var(--muted)">Sirve para salas en vivo, retos, duelos y grupos de la palabra del día. También puedes pegar el enlace que te mandaron.</span>
+    <span style="font-size:14px;color:var(--muted)">Sirve para salas en vivo, duelos y códigos de amigo. También puedes pegar el enlace que te mandaron.</span>
     ${navigator.clipboard && navigator.clipboard.readText ? `<button class="chip" data-paste style="align-self:flex-start;display:flex;gap:8px;align-items:center">${ICON.copy}Pegar enlace</button>` : ''}
     <button class="pill solid" id="go" style="margin-top:auto">Entrar</button></section>`;
   const inp = $('#code'); if (!R.pendingJoin) inp.focus();
@@ -747,6 +745,7 @@ const DB = LOCAL ? (() => {
     insert: async (t, row) => { const a = all(t);
       if (row.id != null && a.some(r => r.id === row.id)) throw {code:'23505'};
       if (uniq[t] && a.some(r => uniq[t].every(k => r[k] === row[k]))) throw {code:'23505'};
+      if (t === 'duel_turns' && row.round != null && a.some(r => r.duel_id === row.duel_id && r.round === row.round && r.solver_id === row.solver_id)) throw {code:'23505'};
       row = {...row, id: row.id ?? Date.now() + Math.random(), created_at: new Date().toISOString()}; a.push(row); save(t, a); return row; },
     update: async (t, id, patch) => { const a = all(t), r = a.find(x => x.id === id); if (!r) return null; Object.assign(r, patch); save(t, a); return r; },
     listIn: async (t, col, vals) => all(t).filter(r => vals.includes(r[col])),
@@ -919,35 +918,45 @@ function readWordForm(){
   return { es, en: en || '(sin pista)' };
 }
 function bindRandomWord(){ bind({ '[data-rand]': () => { const k = rnd(['palabra', 'palabra', 'varias']), it = rnd(BANK[k][rnd([0, 1, 1, 2])]); $('#es').value = it[0]; $('#en').value = it[1]; } }); }
+const duelSetup = store.get('ahorcado-duel-setup', { level: 1, kind: 'palabra', rounds: 5 });
+// A match: the app picks the words, both players play the same ones, round by round
+async function createDuel(to, st){
+  loading('PREPARANDO EL DUELO…');
+  const items = shuffle(BANK[st.kind][st.level]).slice(0, st.rounds);
+  for (let attempt = 0; attempt < 3; attempt++){
+    const id = asyncCode();
+    try { await DB.insert('duels', { id, a_id: PID, a_name: me.name, a_face: me.face, settings: { level: st.level, kind: st.kind }, items,
+        ...(to ? { b_id: to.id, b_name: to.name, b_face: to.face || 0 } : {}) });
+      remember('duelo', id); inboxAt = 0; if (to) toast('Le aparecerá a ' + to.name + ' en su app'); openDuel(id); return; }
+    catch (e){ if (e.code !== '23505'){ failView(dbErr(e), () => { R.view = 'duelNew'; render(); }); return; } }
+  }
+  failView('No se pudo crear el duelo. Inténtalo otra vez.', () => { R.view = 'duelNew'; render(); });
+}
 function duelNewView(){
-  const fr = friendList(); if (R.duelTo === undefined) R.duelTo = fr.length ? null : 'link';
+  const fr = friendList(), s = duelSetup; if (R.duelTo === undefined) R.duelTo = fr.length ? null : 'link';
   const open = R.duelTo && R.duelTo !== 'link' ? (R.inbox?.items || []).find(x => x.type === 'duelo' && x.with === R.duelTo) : null;
-  const picker = `<div class="field"><span class="label">Para</span><div class="pick">
+  app.innerHTML = `<section class="screen"><div class="top">${backBtn()}<span style="font-size:18px">Nuevo duelo</span><span style="width:44px"></span></div>
+    <h2 class="display" style="font-size:54px">UNO CONTRA<br>UNO</h2>
+    <p style="margin:0;color:var(--muted);line-height:1.45">Las mismas palabras para los dos, ronda a ronda, cada uno cuando pueda. Gana quien sume más puntos.</p>
+    <div class="field"><span class="label">Contra</span><div class="pick">
       ${fr.map(f => `<button class="chip" data-to="${esc(f.id)}" aria-pressed="${R.duelTo === f.id}"><span class="av">${avatar(f.face || 0, 'happy')}</span>${esc(f.name)}</button>`).join('')}
       <button class="chip" data-to="link" aria-pressed="${R.duelTo === 'link'}">${ICON.share} Con enlace</button></div>
       <span style="font-size:13px;color:var(--muted)">${R.duelTo === 'link' ? 'Te daremos un enlace para mandárselo a quien quieras.' : fr.length ? 'Le aparecerá en su app, sin enlaces.' : ''}</span>
-      ${open ? `<div class="note" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px"><span style="font-size:14px">Ya tenéis un duelo abierto.</span><button class="chip" data-open-duel="${esc(open.id)}">Abrirlo</button></div>` : ''}</div>`;
-  app.innerHTML = `<section class="screen"><div class="top">${backBtn()}<span style="font-size:18px">Nuevo duelo</span><span style="width:44px"></span></div>
-    ${wordForm('PON LA<br>PRIMERA', 'Escribe una palabra o frase en español, con una pista en inglés. Cuando la adivine, te pondrá una a ti.', 'Crear duelo', picker)}</section>`;
-  if (R.duelWord){ $('#es').value = R.duelWord.es; $('#en').value = R.duelWord.en; R.duelWord = null; }
-  bindRandomWord();
+      ${open ? `<div class="note" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px"><span style="font-size:14px">Ya tenéis un duelo abierto.</span><button class="chip" data-open-duel="${esc(open.id)}">Abrirlo</button></div>` : ''}</div>
+    <div class="field"><span class="label">Nivel</span><div class="grid3">${LEVELS.map(([n], i) => `<button class="opt" data-level="${i}" aria-pressed="${s.level === i}"><span style="font-size:17px">${n}</span><small>${BASE_TRIES[i]} intentos</small></button>`).join('')}</div></div>
+    <div class="field"><span class="label">Qué adivinar</span><div style="display:flex;flex-wrap:wrap;gap:8px">${KINDS.map(([k, n]) => `<button class="chip" data-kind="${k}" aria-pressed="${s.kind === k}">${n}</button>`).join('')}</div></div>
+    <div class="field"><span class="label">Rondas</span><div style="display:flex;gap:8px">${[3, 5, 7].map(n => `<button class="chip" data-rounds="${n}" aria-pressed="${s.rounds === n}">${n}</button>`).join('')}</div></div>
+    <button class="pill solid" data-send style="margin-top:auto">Empezar duelo</button></section>`;
+  const save = () => { store.set('ahorcado-duel-setup', s); const sc = app.querySelector('.screen').scrollTop; duelNewView(); app.querySelector('.screen').scrollTop = sc; };
   bind({ '[data-back]': () => { R.duelTo = undefined; goHome(); },
     '[data-open-duel]': el => { R.duelTo = undefined; openDuel(el.dataset.openDuel); },
-    '[data-to]': el => { R.duelWord = { es: $('#es').value, en: $('#en').value }; R.duelTo = el.dataset.to; duelNewView(); },
-    '[data-send]': async () => {
-    const w = readWordForm(); if (!w) return;
-    if (!R.duelTo){ toast('Elige para quién es'); return; }
-    const to = R.duelTo === 'link' ? null : fr.find(f => f.id === R.duelTo); R.duelTo = undefined;
-    loading('CREANDO EL DUELO…');
-    for (let attempt = 0; attempt < 3; attempt++){
-      const id = asyncCode();
-      try { await DB.insert('duels', { id, a_id: PID, a_name: me.name, a_face: me.face, ...(to ? { b_id: to.id, b_name: to.name, b_face: to.face || 0 } : {}) });
-        await DB.insert('duel_turns', { duel_id: id, setter_id: PID, setter_name: me.name, es: w.es, en: w.en });
-        remember('duelo', id); inboxAt = 0; if (to) toast('Le aparecerá a ' + to.name + ' en su app'); openDuel(id); return; }
-      catch (e){ if (e.code !== '23505'){ failView(dbErr(e), () => { R.view = 'duelNew'; render(); }); return; } }
-    }
-    failView('No se pudo crear el duelo. Inténtalo otra vez.', () => { R.view = 'duelNew'; render(); });
-  } });
+    '[data-to]': el => { R.duelTo = el.dataset.to; save(); },
+    '[data-level]': el => { s.level = +el.dataset.level; save(); }, '[data-kind]': el => { s.kind = el.dataset.kind; save(); },
+    '[data-rounds]': el => { s.rounds = +el.dataset.rounds; save(); },
+    '[data-send]': () => {
+      if (!R.duelTo){ toast('Elige contra quién'); return; }
+      const to = R.duelTo === 'link' ? null : fr.find(f => f.id === R.duelTo); R.duelTo = undefined;
+      createDuel(to, s); } });
 }
 function openDuel(id){ R.view = 'duel'; R.duelId = id; R.duelData = null; setURL('duelo=' + id); render(); }
 async function duelView(){
@@ -962,7 +971,66 @@ async function duelView(){
     R.duelData = { d, turns }; remember('duelo', id); drawDuel(d, turns);
   } catch (e){ failView(dbErr(e), () => render()); }
 }
-function drawDuel(d, turns){
+function drawDuel(d, turns){ return Array.isArray(d.items) && d.items.length ? drawMatch(d, turns) : drawDuelOld(d, turns); }
+// Where a match stands, from one player's side
+function matchState(d, turns, me_ = PID){
+  const N = d.items.length, o = opp(d), oid = o ? o.id : null;
+  const mine = {}, theirs = {};
+  for (const t of turns) if (t.round != null){ if (t.solver_id === me_) mine[t.round] = t; else if (t.solver_id === oid) theirs[t.round] = t; }
+  const myDone = Object.keys(mine).length, oppDone = Object.keys(theirs).length;
+  let my = 0, their = 0, wins = [0, 0];
+  for (let r = 0; r < N; r++) if (mine[r] && theirs[r]){ my += mine[r].pts || 0; their += theirs[r].pts || 0;
+    if ((mine[r].pts || 0) > (theirs[r].pts || 0)) wins[0]++; else if ((theirs[r].pts || 0) > (mine[r].pts || 0)) wins[1]++; }
+  const over = myDone >= N && oppDone >= N;
+  return { N, o, mine, theirs, myDone, oppDone, my, their, wins, over, canPlay: !d.ended_at && myDone < N && myDone <= oppDone };
+}
+function drawMatch(d, turns){
+  const amA = d.a_id === PID, amB = d.b_id === PID, inDuel = amA || amB;
+  const m = matchState(d, turns), other = m.o ? m.o.name : 'tu amigo', st = d.settings || { level: 1, kind: 'palabra' };
+  const url = SITE + '?duelo=' + d.id;
+  let action = '';
+  if (d.ended_at) action = `<div class="note"><span class="label">Duelo terminado</span><p>${d.ended_by === PID ? 'Terminaste' : esc(d.ended_by === d.a_id ? d.a_name : d.b_name) + ' terminó'} este duelo.</p></div>`;
+  else if (!inDuel) action = `<div class="note"><p>Este duelo es entre ${esc(d.a_name)} y ${esc(d.b_name)}. Crea el tuyo desde el inicio.</p></div>`;
+  else if (m.over){
+    const res = m.my > m.their ? '¡GANASTE!' : m.my < m.their ? 'GANÓ ' + esc(other).toUpperCase() : 'EMPATE';
+    action = `<div class="note" style="align-items:center;text-align:center"><span class="display" style="font-size:40px;line-height:1">${res}</span><p style="color:var(--muted)">${m.my} a ${m.their} · rondas ganadas ${m.wins[0]}–${m.wins[1]}</p></div>
+      ${m.o ? `<button class="pill solid" data-rematch style="margin-top:auto">Revancha</button>` : ''}`;
+  } else if (m.canPlay) action = `<div class="note"><span class="label">Te toca · ronda ${m.myDone + 1} de ${m.N}</span><p>${m.oppDone > m.myDone ? esc(other) + ' ya la jugó. ¿Sacarás más puntos?' : 'Juega tu palabra. Verás cómo le fue a ' + esc(other) + ' cuando la juegue.'}</p></div><button class="pill solid" data-play style="margin-top:auto">Jugar ronda ${m.myDone + 1}</button>`;
+  else action = `<div class="note"><span class="label">Esperando</span><p>${d.b_id ? esc(other) + ' tiene que jugar la ronda ' + (m.oppDone + 1) + '.' : 'Mándale el enlace a alguien para que empiece.'}</p></div>`;
+  const rows = []; for (let r = 0; r < m.N; r++){
+    const a = m.mine[r], b = m.theirs[r];
+    if (a && b){ const w = (a.pts || 0) > (b.pts || 0) ? 0 : (b.pts || 0) > (a.pts || 0) ? 1 : -1;
+      rows.push(`<div class="r"><span class="rk">${r + 1}</span><div class="who"><b>“${esc(d.items[r][0])}”</b><span>${esc(d.items[r][1] || '')}</span></div><span class="tag ${w === 0 ? 'on' : 'off'}">${a.pts || 0}</span><span class="tag ${w === 1 ? 'on' : 'off'}">${b.pts || 0}</span></div>`); }
+    else if (a || b) rows.push(`<div class="r"><span class="rk">${r + 1}</span><div class="who"><b>${a ? 'Ya jugaste' : esc(other) + ' ya jugó'}</b><span>${a ? 'Esperando a ' + esc(other) : 'Te toca'}</span></div></div>`);
+  }
+  app.innerHTML = `<section class="screen">
+    <div class="top">${backBtn('Volver al inicio')}<span class="label">Duelo ${esc(fmtCode(d.id))}</span><span style="width:44px"></span></div>
+    <div class="vs"><div class="p">${avatar(me.face, m.over && m.my >= m.their ? 'happy' : 'neutral')}<span>Tú</span><b>${m.my}</b></div>
+      <span class="hand" style="font-size:30px">VS</span>
+      <div class="p">${m.o ? avatar(m.o.face, m.over && m.their >= m.my ? 'happy' : 'neutral') : `<div style="width:68px;height:68px;border-radius:50%;border:1.5px dashed var(--line)"></div>`}<span>${m.o ? esc(m.o.name) : 'Esperando…'}</span><b>${m.o ? m.their : '—'}</b></div></div>
+    <div class="tags"><span>${LEVELS[st.level][0]}</span><span>${kindName(st.kind)}</span><span>Ronda ${Math.min(m.N, Math.min(m.myDone, m.oppDone) + 1)} de ${m.N}</span></div>
+    ${d.b_id || d.ended_at ? '' : shareRow()}
+    ${action}
+    ${rows.length ? `<div class="rows hist"><div class="label" style="display:flex;justify-content:space-between;padding-bottom:6px"><span>Rondas</span><span>Tú · ${esc(other)}</span></div>${rows.join('')}</div>` : ''}
+    ${inDuel && !d.ended_at && !m.over ? `<button class="link" data-end style="align-self:center;color:var(--muted)">${R.endSure === d.id ? '¿Seguro? Se cerrará para los dos · Terminar' : 'Terminar duelo'}</button>` : ''}
+  </section>`;
+  bindShare(url, `Te reto a un duelo de ahorcado en español: ${fmtCode(d.id)}`);
+  bind({ '[data-back]': goHome,
+    '[data-rematch]': () => createDuel(m.o, { level: st.level, kind: st.kind, rounds: m.N }),
+    '[data-play]': () => { const r = m.myDone, item = d.items[r];
+      puzzle({ item, tries: triesOf(st), title: 'DUELO', sub: `${r + 1} / ${m.N}`, label: `${LEVELS[st.level][0]} · ${kindName(st.kind)}`, next: 'Guardar',
+        onQuit: () => openDuel(d.id),
+        onDone: async res => { loading('GUARDANDO…');
+          const save = async () => { try { await DB.insert('duel_turns', { duel_id: d.id, round: r, setter_id: PID, setter_name: me.name, es: item[0], en: item[1] || '',
+              solver_id: PID, solver_name: me.name, solved: res.solved, miss: res.miss, pts: res.pts, answered_at: new Date().toISOString() }); }
+            catch (e){ if (e.code !== '23505'){ failView(dbErr(e), save); return; } }
+            inboxAt = 0; openDuel(d.id); };
+          save(); } }); },
+    '[data-end]': async el => { if (R.endSure !== d.id){ R.endSure = d.id; drawMatch(d, turns); return; }
+      R.endSure = null; el.disabled = true;
+      try { await endDuel(d.id); inboxAt = 0; toast('Duelo terminado'); goHome(); } catch (e){ toast(e.message && !e.code ? e.message : dbErr(e)); el.disabled = false; } } });
+}
+function drawDuelOld(d, turns){
   const amA = d.a_id === PID, amB = d.b_id === PID, inDuel = amA || amB;
   const other = amA ? (d.b_name || 'tu amigo') : d.a_name;
   const pts = id => turns.filter(t => t.solver_id === id).reduce((a, t) => a + (t.pts || 0), 0);
@@ -1006,7 +1074,7 @@ function drawDuel(d, turns){
         catch (e){ failView(dbErr(e), () => openDuel(d.id)); return; }
         inboxAt = 0; R.duelWrite = true; openDuel(d.id); } }),
     '[data-write]': () => writeDuelWord(d),
-    '[data-end]': async el => { if (R.endSure !== d.id){ R.endSure = d.id; drawDuel(d, turns); return; }
+    '[data-end]': async el => { if (R.endSure !== d.id){ R.endSure = d.id; drawDuelOld(d, turns); return; }
       R.endSure = null; el.disabled = true;
       try { await endDuel(d.id); inboxAt = 0; toast('Duelo terminado'); goHome(); } catch (e){ toast(e.message && !e.code ? e.message : dbErr(e)); el.disabled = false; } } });
   if (R.duelWrite && action.includes('data-write')){ R.duelWrite = false; writeDuelWord(d); }
@@ -1026,6 +1094,8 @@ function writeDuelWord(d){
 }
 
 /* ---------- Palabra del día: one word a day, scored within your group ---------- */
+// Retos and Palabra del día are off the home screen; old links to them still open.
+const SHOW_RETOS = false;
 /* ---------- Amigos and the home inbox: play with people again without sending links ---------- */
 // Every player gets a short friend code (like SOL·4821). Adding someone saves a friendship both ways,
 // and anyone you've had a duel with counts as a friend too.
@@ -1070,7 +1140,7 @@ async function loadInbox(force){
     const friends = new Map();
     for (const r of [...fr, ...duels]){ const o = opp(r); if (o && o.id !== PID && !friends.has(o.id)) friends.set(o.id, o); }
     const known = store.get('ahorcado-mine', []).filter(x => x.type === 'reto').map(x => x.id);
-    const [byFriends, mineR] = await Promise.all([DB.listIn('challenges', 'creator_id', [...friends.keys(), PID]), DB.listIn('challenges', 'id', known)]);
+    const [byFriends, mineR] = !SHOW_RETOS ? [[], []] : await Promise.all([DB.listIn('challenges', 'creator_id', [...friends.keys(), PID]), DB.listIn('challenges', 'id', known)]);
     const played = new Map(myRes.map(r => [r.challenge_id, r]));
     const now = Date.now(), items = [];
     const hidden = new Set(store.get('ahorcado-hidden-' + PID, []));
@@ -1079,14 +1149,20 @@ async function loadInbox(force){
       const ts = turns.filter(t => t.duel_id === d.id).sort((x, y) => (x.created_at < y.created_at ? -1 : 1)), last = ts[ts.length - 1];
       const o = opp(d), who = o ? o.name : 'tu amigo';
       let status, hot = false;
-      if (!d.b_id) status = 'Sin rival · comparte el enlace';
+      if (Array.isArray(d.items) && d.items.length){
+        const m = matchState(d, ts);
+        if (m.over) status = (m.my > m.their ? 'Ganaste ' : m.my < m.their ? 'Perdiste ' : 'Empate ') + m.my + '–' + m.their;
+        else if (m.canPlay){ status = 'Te toca · ronda ' + (m.myDone + 1) + ' de ' + m.N; hot = true; }
+        else status = d.b_id ? 'Esperando a ' + who : 'Sin rival · comparte el enlace';
+      }
+      else if (!d.b_id) status = 'Sin rival · comparte el enlace';
       else if (last && !last.answered_at){ if (last.setter_id === PID) status = 'Esperando a ' + who; else { status = 'Te toca adivinar'; hot = true; } }
       else if ((last ? last.solver_id : d.a_id) === PID){ status = 'Te toca poner palabra'; hot = true; }
       else status = who + ' está eligiendo';
       items.push({ type: 'duelo', id: d.id, with: o ? o.id : null, title: 'Duelo con ' + who, face: o ? o.face : 0, status, hot, at: Date.parse((last || d).created_at) });
     }
     const seen = new Set();
-    for (const c of [...byFriends, ...mineR]){ if (seen.has(c.id) || hidden.has(c.id)) continue; seen.add(c.id);
+    for (const c of SHOW_RETOS ? [...byFriends, ...mineR] : []){ if (seen.has(c.id) || hidden.has(c.id)) continue; seen.add(c.id);
       const ended = now > Date.parse(c.expires_at), mineC = c.creator_id === PID, res = played.get(c.id);
       if (ended && !res && !mineC) continue;
       if (ended && now - Date.parse(c.expires_at) > 3 * 864e5) continue;

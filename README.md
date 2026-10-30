@@ -5,15 +5,13 @@ El juego del ahorcado en español, para jugar con amigos, en vivo o cada uno a s
 ## Ways to play
 
 - **En vivo:** a fast live room. Everyone plays at the same time with a room code like `TACO·42`.
-- **Reto:** the same 3, 5 or 10 words for everyone, played whenever you like before a deadline (24 hours, 3 days or 1 week), with a shared leaderboard.
-- **Duelo:** two players set Spanish words, each with an English clue, for each other, taking turns at their own pace.
-- **Palabra del día:** one word a day, the same for your whole group. You get one try, and there's a group leaderboard and a streak.
+- **Duelo:** a one-on-one match against a friend. Pick the level, what to guess and 3, 5 or 7 rounds, and the app picks the words. You both play the same word each round, whenever you like. You can be at most one round ahead, and a round's result shows once you've both played it. The highest total wins, and **Revancha** starts a rematch.
 - **Practicar solo:** single-player practice.
-- **Amigos:** each player has a friend code like `SOL·4821`. Add someone once, by code or with their `?amigo=` link, and after that duels you set for them and retos you create show up on their home screen, with no links. Anyone you've had a duel with becomes a friend automatically.
+- **Amigos:** each player has a friend code like `SOL·4821`. Add someone once, by code or with their `?amigo=` link, and after that duels you start with them show up on their home screen, with no links. Anyone you've had a duel with becomes a friend automatically.
 
-**Tus partidas** on the home screen lists your duels and retos, plus your friends' retos. Anything waiting for you moves to the top. Tap **Editar** to clear it: ending a duel closes it for both players, and removing a reto only hides it from your own list. Each duel also has **Terminar duelo** at the bottom.
+**Tus partidas** on the home screen lists your duels. Anything waiting for you moves to the top. Tap **Editar** to clear it: ending a duel closes it for both players. Each duel also has **Terminar duelo** at the bottom.
 
-**Unirse con código** accepts any live room, reto, duelo, group or friend code. Links work too: `?sala=`, `?reto=`, `?duelo=`, `?grupo=`, `?amigo=`.
+**Unirse con código** accepts any live room, duelo or friend code. Links work too: `?sala=`, `?reto=`, `?duelo=`, `?grupo=`, `?amigo=`.
 
 ## Install it on your phone
 
@@ -41,7 +39,7 @@ Live rooms:
 - **First to finish:** in Carrera and Uno elige, the first person to complete the word gets +50 and the round ends for everyone, moving on to the next word.
 - **Uno elige:** the word setter gets +30 for each player who guesses their word.
 
-Reto, Duelo and Palabra del día:
+Duelo:
 - **Letters:** 10 points for each correct letter, multiplied by how many times it appears in the word.
 - **Solving:** 100 points.
 - **Accuracy:** +10 for each try you have left.
@@ -66,3 +64,5 @@ Add `?local` to the URL to play between browser tabs on one computer, with no ne
 ## Editing words
 
 Edit `words.js`. Each entry is `[spanish, english clue, example ES, example EN]`; the examples are optional.
+
+Reto and Palabra del día are switched off (`SHOW_RETOS` in `index.html`) and hidden from the home screen. Old links to them still open.

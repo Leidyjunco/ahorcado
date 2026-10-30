@@ -91,6 +91,12 @@ create table if not exists public.friends (
 );
 
 -- Finding a player's own games quickly
+-- Duel matches: the app picks the words (items) and both players play them round by round
+alter table public.duels      add column if not exists settings jsonb;
+alter table public.duels      add column if not exists items    jsonb;
+alter table public.duel_turns add column if not exists round    int;
+create unique index if not exists duel_turns_round_once on public.duel_turns (duel_id, round, solver_id) where round is not null;
+
 -- Either player can end a duel; it then disappears from both players' lists
 alter table public.duels add column if not exists ended_at timestamptz;
 alter table public.duels add column if not exists ended_by text;
