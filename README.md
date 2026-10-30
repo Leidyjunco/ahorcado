@@ -9,12 +9,11 @@ El juego del ahorcado en español, para jugar con amigos, en vivo o cada uno a s
 - **Duelo:** two players set Spanish words, each with an English clue, for each other, taking turns at their own pace.
 - **Palabra del día:** one word a day, the same for your whole group. You get one try, and there's a group leaderboard and a streak.
 - **Practicar solo:** single-player practice.
-
 - **Amigos:** each player has a friend code like `SOL·4821`. Add someone once, by code or with their `?amigo=` link, and after that duels you set for them and retos you create show up on their home screen, with no links. Anyone you've had a duel with becomes a friend automatically.
 
 **Tus partidas** on the home screen lists your duels and retos, plus your friends' retos. Anything waiting for you moves to the top.
 
-**Unirse con código** accepts any live room, reto, duelo, group or friend code. Links work too: `?sala=`, `?reto=`, `?duelo=`, `?grupo=`.
+**Unirse con código** accepts any live room, reto, duelo, group or friend code. Links work too: `?sala=`, `?reto=`, `?duelo=`, `?grupo=`, `?amigo=`.
 
 ## Install it on your phone
 
