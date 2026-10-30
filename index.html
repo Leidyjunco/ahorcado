@@ -342,10 +342,12 @@ function apply(a, from){
     if (L.has(k)){
       gain(from, 10*occ(word,k), 'letras');
       if ([...L].every(c => r.g.includes(c))){
-        r.solved = Date.now(); const rank = Object.values(S.race).filter(x => x.solved && x !== r).length;
-        gain(from, 100, 'resuelta'); gain(from, [50,25,10][rank]||0, 'rapidez');
-        if (!S.firstSolver) S.firstSolver = from;
+        // first to complete the word wins the round; everyone moves on to the next word
+        r.solved = Date.now();
+        gain(from, 100, 'resuelta'); gain(from, 50, 'primero');
+        S.firstSolver = from;
         if (S.setterId) gain(S.setterId, 30, 'acertaron su palabra');
+        endRound(); return;
       }
     } else { r.miss++; if (r.miss >= tries) r.out = true; }
     if (Object.entries(S.race).every(([id,x]) => x.solved || x.out || !present(id))){ endRound(); return; }
@@ -580,7 +582,7 @@ addEventListener('keydown', e => {
   if (b && !b.disabled) b.click();
 });
 
-function whyText(g){ if (!g) return 'Sin puntos esta ronda'; const lab = {letras:'letras', resuelta:'resuelta', rapidez:'rapidez', 'acertaron su palabra':'acertaron su palabra'}; return Object.entries(g.why).map(([k,v])=>`${lab[k]||k} +${v}`).join(' · '); }
+function whyText(g){ if (!g) return 'Sin puntos esta ronda'; const lab = {letras:'letras', resuelta:'resuelta', primero:'el primero', rapidez:'rapidez', 'acertaron su palabra':'acertaron su palabra'}; return Object.entries(g.why).map(([k,v])=>`${lab[k]||k} +${v}`).join(' · '); }
 function roundEndView(){
   const S = R.S, it = S.item, first = S.firstSolver;
   const title = first ? (first === me.id ? '¡LO TIENES!' : '¡' + nameOf(first).toUpperCase() + '<br>LO TIENE!') : 'NADIE<br>LO SACÓ.';

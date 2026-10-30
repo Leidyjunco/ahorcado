@@ -21,7 +21,7 @@ El juego del ahorcado en español, en vivo con amigos. A Spanish-learning Hangma
 
 - **Letters:** 10 points for each correct letter, multiplied by how many times it appears in the word.
 - **Solving:** 100 points for solving the word.
-- **Speed bonus** in Carrera: +50 for the first solver, +25 for the second, +10 for the third.
+- **First to finish:** in Carrera and Uno elige, the first person to complete the word gets +50 and the round ends for everyone, moving on to the next word.
 - **Uno elige:** the word setter gets +30 for each player who guesses their word.
 
 ## How it works
