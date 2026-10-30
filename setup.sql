@@ -69,18 +69,50 @@ create table if not exists public.daily_results (
   unique (day, group_code, player_id)
 );
 
+-- Amigos: each phone's player gets a short friend code; a friendship is saved once and works both ways
+create table if not exists public.players (
+  id         text primary key,
+  created_at timestamptz not null default now(),
+  code       text not null unique,
+  name       text not null,
+  face       int  not null default 0
+);
+
+create table if not exists public.friends (
+  id         bigint generated always as identity primary key,
+  created_at timestamptz not null default now(),
+  a_id       text not null,
+  a_name     text not null,
+  a_face     int  not null default 0,
+  b_id       text not null,
+  b_name     text not null,
+  b_face     int  not null default 0,
+  unique (a_id, b_id)
+);
+
+-- Finding a player's own games quickly
+create index if not exists duels_a_idx        on public.duels (a_id);
+create index if not exists duels_b_idx        on public.duels (b_id);
+create index if not exists friends_a_idx      on public.friends (a_id);
+create index if not exists friends_b_idx      on public.friends (b_id);
+create index if not exists challenges_creator on public.challenges (creator_id);
+create index if not exists results_player     on public.results (player_id);
+
 -- Access rules: the app can read and add rows; a duel's second player can join once,
--- and a duel turn can be answered once. Nothing can be deleted from the app.
+-- a duel turn can be answered once, and a player can change their name and face (never their code).
+-- Nothing can be deleted from the app.
 alter table public.challenges    enable row level security;
 alter table public.results       enable row level security;
 alter table public.duels         enable row level security;
 alter table public.duel_turns    enable row level security;
 alter table public.daily_results enable row level security;
+alter table public.players       enable row level security;
+alter table public.friends       enable row level security;
 
 do $$
 declare t text;
 begin
-  foreach t in array array['challenges','results','duels','duel_turns','daily_results'] loop
+  foreach t in array array['challenges','results','duels','duel_turns','daily_results','players','friends'] loop
     execute format('drop policy if exists "read" on public.%I', t);
     execute format('create policy "read" on public.%I for select to anon, authenticated using (true)', t);
     execute format('drop policy if exists "add" on public.%I', t);
@@ -94,5 +126,10 @@ create policy "join once" on public.duels for update to anon, authenticated usin
 drop policy if exists "answer once" on public.duel_turns;
 create policy "answer once" on public.duel_turns for update to anon, authenticated using (answered_at is null) with check (true);
 
-grant select, insert on public.challenges, public.results, public.daily_results to anon, authenticated;
+drop policy if exists "rename" on public.players;
+create policy "rename" on public.players for update to anon, authenticated using (true) with check (true);
+
+grant select, insert on public.challenges, public.results, public.daily_results, public.players, public.friends to anon, authenticated;
 grant select, insert, update on public.duels, public.duel_turns to anon, authenticated;
+revoke update on public.players from anon, authenticated;
+grant update (name, face) on public.players to anon, authenticated;

@@ -127,6 +127,17 @@ a{color:var(--fg)}
 .mine{display:flex;flex-direction:column;flex:none}
 .mine button{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 2px;border-top:1px solid var(--faint);text-align:left;font-size:15px}
 .mine button span:last-child{color:var(--muted);font-size:13px;white-space:nowrap}
+.inbox button{justify-content:flex-start}
+.inbox .av{width:38px;height:38px;flex:none;display:block}.inbox .av svg{width:100%;height:100%}
+.inbox .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.inbox .tx b{font-weight:400;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.inbox .tx small{font-size:13px;color:var(--muted)}.inbox .tx small.hot{color:var(--fg);font-weight:500}
+.inbox button span:last-child{color:var(--fg);font-size:12px}
+.badge{background:var(--fg);color:#000;border-radius:999px;padding:2px 9px;font-size:11px;letter-spacing:.04em}
+.fav{width:40px;height:40px;flex:none;display:block}.fav svg{width:100%;height:100%}
+.pick{display:flex;flex-wrap:wrap;gap:8px}.pick .chip{display:flex;align-items:center;gap:8px}
+.pick .av{width:24px;height:24px;display:inline-block;flex:none}.pick .av svg{width:100%;height:100%}
+.chip[aria-pressed="true"] .av svg{filter:invert(1)}
 .lb .r svg{width:34px;height:34px;flex:none}
 .sq{letter-spacing:2px;font-size:12px}
 .vs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;flex:none}
@@ -435,6 +446,7 @@ function installView(){
 function render(){
   const v = R.view;
   if (v === 'install') return installView();
+  if (v === 'friends') return friendsView();
   if (v === 'home') return homeView();
   if (v === 'name') return nameView();
   if (v === 'create') return createView();
@@ -449,13 +461,16 @@ function render(){
 function bind(map){ for (const [sel, fn] of Object.entries(map)) app.querySelectorAll(sel).forEach(el => el.onclick = e => fn(el, e)); }
 const backBtn = (label='Volver') => `<button class="ring" data-back aria-label="${label}">${ICON.back}</button>`;
 
-function homeView(){
+function homeView(quiet){
+  const hotFirst = !!R.inbox?.items?.some(x => x.hot);
+  if (!quiet && me.name){ ensurePlayer(); setTimeout(() => refreshHome(), 0); }
   app.innerHTML = `<section class="screen">
     <div class="top"><span class="label">Juego de palabras</span>
-      ${me.name ? `<button class="chip" data-profile style="padding:8px 12px;font-size:14px;display:flex;gap:8px;align-items:center"><span style="width:26px;height:26px;display:inline-block">${avatar(me.face)}</span>${esc(me.name)}</button>` : ''}</div>
+      ${me.name ? `<span style="display:flex;gap:8px"><button class="chip" data-friends style="padding:8px 12px;font-size:14px">Amigos</button><button class="chip" data-profile style="padding:8px 12px;font-size:14px;display:flex;gap:8px;align-items:center"><span style="width:26px;height:26px;display:inline-block">${avatar(me.face)}</span>${esc(me.name)}</button></span>` : ''}</div>
     <div class="stage" style="min-height:190px;flex:none;height:190px">${hangman(6,'neutral',false,'Dibujo a mano del ahorcado')}</div>
     <div class="grid3 label" style="letter-spacing:.08em;font-size:11px;color:rgba(242,242,242,.75);flex:none"><span>Adivina la palabra</span><span style="text-align:center">En español</span><span style="text-align:right">Con amigos</span></div>
     <h1 class="wordmark" style="font-size:min(84px,21vw);margin:0 -4px;flex:none">AHO<span class="slant">R</span><span class="slant">C</span>ADO</h1>
+    ${hotFirst ? inboxList() : ''}
     <div class="modes">
       <button class="mcard live" data-go="create"><b>EN VIVO</b><span>Partida rápida, todos a la vez</span></button>
       <button class="mcard" data-go="retoNew"><b>RETO</b><span>Las mismas palabras, cada uno a su ritmo</span></button>
@@ -467,11 +482,12 @@ function homeView(){
       <button class="pill ghost" data-go="join">Unirse con código</button>
       <button class="link" data-go="solo">Practicar solo</button>
     </div>
-    ${mineList()}</section>`;
+    ${hotFirst ? '' : inboxList()}</section>`;
   fitWordmark();
   bind({ '[data-go]': el => needName(() => { const g = el.dataset.go; if (g==='solo'){ R.soloSetup = true; R.view = 'create'; } else if (g === 'daily'){ openDaily(); return; } else { R.soloSetup = false; R.view = g; } render(); }),
          '[data-mine]': el => needName(() => { const [t, id] = el.dataset.mine.split(':'); t === 'reto' ? openReto(id) : openDuel(id); }),
          '[data-profile]': () => { R.afterName = () => { R.view = 'home'; render(); }; R.view = 'name'; render(); },
+         '[data-friends]': () => friendsView(),
          '[data-install]': () => { R.installCode = null; R.afterInstall = null; R.view = 'install'; render(); },
          '[data-hideinstall]': () => { store.set('ahorcado-hide-install', true); render(); } });
 }
@@ -495,7 +511,7 @@ function nameView(){
   const inp = $('#nm'); inp.focus();
   bind({ '[data-back]': () => { R.view = 'home'; render(); },
          '[data-face]': el => { me.face = +el.dataset.face; app.querySelectorAll('[data-face]').forEach(b => b.setAttribute('aria-pressed', b === el)); },
-         '#saveName': () => { const n = inp.value.trim(); if (!n){ inp.focus(); toast('Escribe un nombre'); return; } me.name = n.slice(0,16); store.set('ahorcado-name', me.name); store.set('ahorcado-face', me.face); if (R.net) R.net.retrack(); (R.afterName || (()=>{ R.view='home'; render(); }))(); } });
+         '#saveName': () => { const n = inp.value.trim(); if (!n){ inp.focus(); toast('Escribe un nombre'); return; } me.name = n.slice(0,16); store.set('ahorcado-name', me.name); store.set('ahorcado-face', me.face); if (R.net) R.net.retrack(); ensurePlayer(); (R.afterName || (()=>{ R.view='home'; render(); }))(); } });
   inp.onkeydown = e => { if (e.key === 'Enter') $('#saveName').click(); };
 }
 
@@ -534,12 +550,13 @@ function joinView(){
   const inp = $('#code'); if (!R.pendingJoin) inp.focus();
   const go = async () => { const raw = inp.value.trim(); R.pendingJoin = null;
     // a pasted invite link: ...?reto=X / ?duelo=X / ?grupo=X / ?sala=X
-    const m = raw.match(/[?&](sala|reto|duelo|grupo)=([A-Za-z0-9·]+)/);
-    if (m){ const c = normCode(m[2]);
+    const m = raw.match(/[?&](sala|reto|duelo|grupo|amigo)=([A-Za-z0-9·]+)/);
+    if (m){ const c = normCode(m[2]); if (m[1] === 'amigo') return befriend(c);
       if (m[1] === 'reto') return openReto(c); if (m[1] === 'duelo') return openDuel(c);
       if (m[1] === 'grupo') return joinGroup(c); return enterRoom(c, null); }
     const c = normCode(raw); if (c.length < 3){ toast('Escribe el código'); inp.focus(); return; }
     // a code can be a challenge, a duel, a daily-word group or a live room
+    if (isFriendCode(c)) return befriend(c);
     loading('BUSCANDO…');
     try { if (await DB.get('challenges', c)) return openReto(c); if (await DB.get('duels', c)) return openDuel(c);
           if ((await DB.list('daily_results', 'group_code', c)).length) return joinGroup(c); } catch(e){}
@@ -715,7 +732,7 @@ function goHome(){ R.view = 'home'; history.replaceState(null, '', location.path
 // Saved games live in Supabase tables (see setup.sql); ?local uses this browser's storage instead, for testing.
 const DB = LOCAL ? (() => {
   const all = t => store.get('ahdb-' + t, []), save = (t, a) => store.set('ahdb-' + t, a);
-  const uniq = { results: ['challenge_id','player_id'], daily_results: ['day','group_code','player_id'] };
+  const uniq = { results: ['challenge_id','player_id'], daily_results: ['day','group_code','player_id'], players: ['code'], friends: ['a_id','b_id'] };
   return {
     get: async (t, id) => all(t).find(r => r.id === id) || null,
     list: async (t, col, val) => all(t).filter(r => r[col] === val),
@@ -724,7 +741,9 @@ const DB = LOCAL ? (() => {
       if (row.id != null && a.some(r => r.id === row.id)) throw {code:'23505'};
       if (uniq[t] && a.some(r => uniq[t].every(k => r[k] === row[k]))) throw {code:'23505'};
       row = {...row, id: row.id ?? Date.now() + Math.random(), created_at: new Date().toISOString()}; a.push(row); save(t, a); return row; },
-    update: async (t, id, patch) => { const a = all(t), r = a.find(x => x.id === id); if (!r) return null; Object.assign(r, patch); save(t, a); return r; }
+    update: async (t, id, patch) => { const a = all(t), r = a.find(x => x.id === id); if (!r) return null; Object.assign(r, patch); save(t, a); return r; },
+    listIn: async (t, col, vals) => all(t).filter(r => vals.includes(r[col])),
+    mine: async t => all(t).filter(r => r.a_id === PID || r.b_id === PID).reverse()
   };
 })() : (() => {
   const c = () => (supa = supa || window.supabase.createClient(SUPA_URL, SUPA_KEY));
@@ -734,7 +753,10 @@ const DB = LOCAL ? (() => {
     list: (t, col, val) => q(c().from(t).select('*').eq(col, val).order('created_at', { ascending: true })),
     list2: (t, a, av, b, bv) => q(c().from(t).select('*').eq(a, av).eq(b, bv).order('created_at', { ascending: true })),
     insert: (t, row) => q(c().from(t).insert(row).select().single()),
-    update: async (t, id, patch) => (await q(c().from(t).update(patch).eq('id', id).select()))[0] || null
+    update: async (t, id, patch) => (await q(c().from(t).update(patch).eq('id', id).select()))[0] || null,
+    listIn: (t, col, vals) => vals.length ? q(c().from(t).select('*').in(col, vals)) : Promise.resolve([]),
+    // rows where this player is either side (duels, friends); player ids are letters and digits only
+    mine: t => q(c().from(t).select('*').or(`a_id.eq.${PID},b_id.eq.${PID}`).order('created_at', { ascending: false }).limit(40))
   };
 })();
 const dbErr = e => { console.error(e); const m = (e && (e.message || e.code)) || '';
@@ -876,13 +898,13 @@ function playReto(ch){
 }
 
 /* ---------- Duelo: two players set words for each other, taking turns ---------- */
-function wordForm(title, intro, btn){
+function wordForm(title, intro, btn, extra = ''){
   return `<h2 class="display" style="font-size:48px">${title}</h2>
     <p style="margin:0;color:var(--muted);line-height:1.45">${intro}</p>
     <div class="field"><label class="label" for="es">En español</label><input class="input" id="es" maxlength="60" autocomplete="off" placeholder="p. ej. la mariposa"></div>
     <div class="field"><label class="label" for="en">Pista en inglés</label><input class="input" id="en" maxlength="60" autocomplete="off" placeholder="p. ej. the butterfly"></div>
     <button class="link" data-rand style="align-self:flex-start;padding-left:0">Elegir una al azar</button>
-    <button class="pill solid" data-send style="margin-top:auto">${btn}</button>`;
+    ${extra}<button class="pill solid" data-send style="margin-top:auto">${btn}</button>`;
 }
 function readWordForm(){
   const es = $('#es').value.trim().slice(0, 60), en = $('#en').value.trim().slice(0, 60);
@@ -891,16 +913,27 @@ function readWordForm(){
 }
 function bindRandomWord(){ bind({ '[data-rand]': () => { const k = rnd(['palabra', 'palabra', 'varias']), it = rnd(BANK[k][rnd([0, 1, 1, 2])]); $('#es').value = it[0]; $('#en').value = it[1]; } }); }
 function duelNewView(){
+  const fr = friendList(); if (R.duelTo === undefined) R.duelTo = fr.length ? null : 'link';
+  const picker = `<div class="field"><span class="label">Para</span><div class="pick">
+      ${fr.map(f => `<button class="chip" data-to="${esc(f.id)}" aria-pressed="${R.duelTo === f.id}"><span class="av">${avatar(f.face || 0, 'happy')}</span>${esc(f.name)}</button>`).join('')}
+      <button class="chip" data-to="link" aria-pressed="${R.duelTo === 'link'}">${ICON.share} Con enlace</button></div>
+      <span style="font-size:13px;color:var(--muted)">${R.duelTo === 'link' ? 'Te daremos un enlace para mandárselo a quien quieras.' : fr.length ? 'Le aparecerá en su app, sin enlaces.' : ''}</span></div>`;
   app.innerHTML = `<section class="screen"><div class="top">${backBtn()}<span style="font-size:18px">Nuevo duelo</span><span style="width:44px"></span></div>
-    ${wordForm('PON LA<br>PRIMERA', 'Escribe una palabra o frase en español para tu amigo, con una pista en inglés. Cuando la adivine, te pondrá una a ti.', 'Crear duelo')}</section>`;
+    ${wordForm('PON LA<br>PRIMERA', 'Escribe una palabra o frase en español, con una pista en inglés. Cuando la adivine, te pondrá una a ti.', 'Crear duelo', picker)}</section>`;
+  if (R.duelWord){ $('#es').value = R.duelWord.es; $('#en').value = R.duelWord.en; R.duelWord = null; }
   bindRandomWord();
-  bind({ '[data-back]': goHome, '[data-send]': async () => {
-    const w = readWordForm(); if (!w) return; loading('CREANDO EL DUELO…');
+  bind({ '[data-back]': () => { R.duelTo = undefined; goHome(); },
+    '[data-to]': el => { R.duelWord = { es: $('#es').value, en: $('#en').value }; R.duelTo = el.dataset.to; duelNewView(); },
+    '[data-send]': async () => {
+    const w = readWordForm(); if (!w) return;
+    if (!R.duelTo){ toast('Elige para quién es'); return; }
+    const to = R.duelTo === 'link' ? null : fr.find(f => f.id === R.duelTo); R.duelTo = undefined;
+    loading('CREANDO EL DUELO…');
     for (let attempt = 0; attempt < 3; attempt++){
       const id = asyncCode();
-      try { await DB.insert('duels', { id, a_id: PID, a_name: me.name, a_face: me.face });
+      try { await DB.insert('duels', { id, a_id: PID, a_name: me.name, a_face: me.face, ...(to ? { b_id: to.id, b_name: to.name, b_face: to.face || 0 } : {}) });
         await DB.insert('duel_turns', { duel_id: id, setter_id: PID, setter_name: me.name, es: w.es, en: w.en });
-        remember('duelo', id); openDuel(id); return; }
+        remember('duelo', id); inboxAt = 0; if (to) toast('Le aparecerá a ' + to.name + ' en su app'); openDuel(id); return; }
       catch (e){ if (e.code !== '23505'){ failView(dbErr(e), () => { R.view = 'duelNew'; render(); }); return; } }
     }
     failView('No se pudo crear el duelo. Inténtalo otra vez.', () => { R.view = 'duelNew'; render(); });
@@ -948,7 +981,7 @@ function drawDuel(d, turns){
     <div class="vs"><div class="p">${avatar(d.a_face, 'happy')}<span>${amA ? 'Tú' : esc(d.a_name)}</span><b>${pts(d.a_id)}</b></div>
       <span class="hand" style="font-size:30px">VS</span>
       <div class="p">${d.b_id ? avatar(d.b_face, 'happy') : `<div style="width:68px;height:68px;border-radius:50%;border:1.5px dashed var(--line)"></div>`}<span>${amB ? 'Tú' : d.b_id ? esc(d.b_name) : 'Esperando…'}</span><b>${d.b_id ? pts(d.b_id) : '—'}</b></div></div>
-    ${shareRow()}
+    ${d.b_id ? '' : shareRow()}
     ${action}
     ${hist ? `<div class="rows hist"><div class="label" style="padding-bottom:6px">Historial</div>${hist}</div>` : ''}
   </section>`;
@@ -959,7 +992,7 @@ function drawDuel(d, turns){
       onDone: async r => { loading('GUARDANDO…');
         try { await DB.update('duel_turns', last.id, { solver_id: PID, solver_name: me.name, solved: r.solved, miss: r.miss, pts: r.pts, answered_at: new Date().toISOString() }); }
         catch (e){ failView(dbErr(e), () => openDuel(d.id)); return; }
-        R.duelWrite = true; openDuel(d.id); } }),
+        inboxAt = 0; R.duelWrite = true; openDuel(d.id); } }),
     '[data-write]': () => writeDuelWord(d) });
   if (R.duelWrite && action.includes('data-write')){ R.duelWrite = false; writeDuelWord(d); }
 }
@@ -973,11 +1006,129 @@ function writeDuelWord(d){
     const w = readWordForm(); if (!w) return; loading('ENVIANDO…');
     try { await DB.insert('duel_turns', { duel_id: d.id, setter_id: PID, setter_name: me.name, es: w.es, en: w.en }); }
     catch (e){ failView(dbErr(e), () => openDuel(d.id)); return; }
-    toast('Enviada. Avisa a ' + other + ' con el enlace.'); openDuel(d.id);
+    inboxAt = 0; toast('Enviada. Le aparecerá a ' + other + ' en su app.'); openDuel(d.id);
   } });
 }
 
 /* ---------- Palabra del día: one word a day, scored within your group ---------- */
+/* ---------- Amigos and the home inbox: play with people again without sending links ---------- */
+// Every player gets a short friend code (like SOL·4821). Adding someone saves a friendship both ways,
+// and anyone you've had a duel with counts as a friend too.
+const friendCode = () => rnd(CODE_WORDS) + String(1000 + Math.floor(Math.random() * 9000));
+const isFriendCode = c => /^[A-Z]+\d{4}$/.test(c);
+let MYCODE = store.get('ahorcado-code-' + PID, null);
+async function ensurePlayer(){
+  if (!me.name) return null;
+  const sig = me.name + '|' + me.face;
+  try {
+    if (!MYCODE){ const ex = await DB.get('players', PID); if (ex){ MYCODE = ex.code; store.set('ahorcado-code-' + PID, MYCODE); } }
+    if (!MYCODE){
+      for (let i = 0; i < 4 && !MYCODE; i++){ const code = friendCode();
+        try { await DB.insert('players', { id: PID, code, name: me.name, face: me.face }); MYCODE = code; store.set('ahorcado-code-' + PID, code); store.set('ahorcado-sig-' + PID, sig); }
+        catch (e){ if (e.code !== '23505') throw e; const ex = await DB.get('players', PID); if (ex){ MYCODE = ex.code; store.set('ahorcado-code-' + PID, MYCODE); } } }
+    }
+    if (MYCODE && store.get('ahorcado-sig-' + PID, '') !== sig){ await DB.update('players', PID, { name: me.name, face: me.face }); store.set('ahorcado-sig-' + PID, sig); }
+  } catch (e){ console.warn(e); }
+  return MYCODE;
+}
+const opp = (r) => r.a_id === PID ? (r.b_id ? { id: r.b_id, name: r.b_name, face: r.b_face } : null) : { id: r.a_id, name: r.a_name, face: r.a_face };
+function friendList(){ const m = new Map(); for (const f of (R.inbox?.friends || [])) m.set(f.id, f); return [...m.values()]; }
+async function addFriendByCode(code){
+  const p = (await DB.list('players', 'code', code))[0];
+  if (!p) return 'none'; if (p.id === PID) return 'self';
+  if (friendList().some(f => f.id === p.id)) return p;
+  try { await DB.insert('friends', { a_id: PID, a_name: me.name, a_face: me.face, b_id: p.id, b_name: p.name, b_face: p.face }); }
+  catch (e){ if (e.code !== '23505') throw e; }
+  await loadInbox(true); return p;
+}
+
+// Home inbox: your duels, your retos and your friends' retos, with whatever needs you on top
+R.inbox = store.get('ahorcado-inbox-' + PID, null);
+let inboxAt = 0, inboxBusy = null;
+async function loadInbox(force){
+  if (!me.name) return R.inbox;
+  if (inboxBusy) return inboxBusy;
+  if (!force && Date.now() - inboxAt < 8000) return R.inbox;
+  inboxBusy = (async () => {
+    const [duels, fr, myRes] = await Promise.all([DB.mine('duels'), DB.mine('friends').catch(() => []), DB.list('results', 'player_id', PID)]);
+    const turns = await DB.listIn('duel_turns', 'duel_id', duels.map(d => d.id));
+    const friends = new Map();
+    for (const r of [...fr, ...duels]){ const o = opp(r); if (o && o.id !== PID && !friends.has(o.id)) friends.set(o.id, o); }
+    const known = store.get('ahorcado-mine', []).filter(x => x.type === 'reto').map(x => x.id);
+    const [byFriends, mineR] = await Promise.all([DB.listIn('challenges', 'creator_id', [...friends.keys(), PID]), DB.listIn('challenges', 'id', known)]);
+    const played = new Map(myRes.map(r => [r.challenge_id, r]));
+    const now = Date.now(), items = [];
+    for (const d of duels){
+      const ts = turns.filter(t => t.duel_id === d.id).sort((x, y) => (x.created_at < y.created_at ? -1 : 1)), last = ts[ts.length - 1];
+      const o = opp(d), who = o ? o.name : 'tu amigo';
+      let status, hot = false;
+      if (!d.b_id) status = 'Sin rival · comparte el enlace';
+      else if (last && !last.answered_at){ if (last.setter_id === PID) status = 'Esperando a ' + who; else { status = 'Te toca adivinar'; hot = true; } }
+      else if ((last ? last.solver_id : d.a_id) === PID){ status = 'Te toca poner palabra'; hot = true; }
+      else status = who + ' está eligiendo';
+      items.push({ type: 'duelo', id: d.id, title: 'Duelo con ' + who, face: o ? o.face : 0, status, hot, at: Date.parse((last || d).created_at) });
+    }
+    const seen = new Set();
+    for (const c of [...byFriends, ...mineR]){ if (seen.has(c.id)) continue; seen.add(c.id);
+      const ended = now > Date.parse(c.expires_at), mineC = c.creator_id === PID, res = played.get(c.id);
+      if (ended && !res && !mineC) continue;
+      if (ended && now - Date.parse(c.expires_at) > 3 * 864e5) continue;
+      const hot = !res && !ended;
+      items.push({ type: 'reto', id: c.id, title: mineC ? 'Tu reto ' + fmtCode(c.id) : 'Reto de ' + c.creator_name, face: c.creator_face,
+        status: res ? res.score + ' pts' + (ended ? ' · terminado' : '') : ended ? 'Terminado' : mineC ? 'Por jugar' : 'Nuevo · por jugar', hot, at: Date.parse(c.created_at) });
+    }
+    items.sort((a, b) => (b.hot - a.hot) || (b.at - a.at));
+    R.inbox = { items: items.slice(0, 12), friends: [...friends.values()] };
+    store.set('ahorcado-inbox-' + PID, R.inbox); inboxAt = Date.now();
+    return R.inbox;
+  })().catch(e => { console.warn(e); return R.inbox; }).finally(() => { inboxBusy = null; });
+  return inboxBusy;
+}
+// fetch in the background and redraw the home screen only if something changed
+async function refreshHome(force){
+  const before = JSON.stringify(R.inbox); await loadInbox(force);
+  if (R.view === 'home' && JSON.stringify(R.inbox) !== before){ const sc = app.querySelector('.screen')?.scrollTop || 0; homeView(true); const el = app.querySelector('.screen'); if (el) el.scrollTop = sc; }
+}
+addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && R.view === 'home') refreshHome(true); });
+function inboxList(){
+  const items = R.inbox?.items; if (!items) return mineList();
+  if (!items.length) return '';
+  const n = items.filter(x => x.hot).length;
+  return `<div class="mine inbox"><span class="label" style="display:flex;justify-content:space-between;padding-bottom:6px"><span>Tus partidas</span>${n ? `<span class="badge">${n} te ${n === 1 ? 'espera' : 'esperan'}</span>` : ''}</span>
+    ${items.map(x => `<button data-mine="${x.type}:${esc(x.id)}"><span class="av">${avatar(x.face || 0, x.hot ? 'happy' : 'neutral')}</span><span class="tx"><b>${esc(x.title)}</b><small class="${x.hot ? 'hot' : ''}">${esc(x.status)}</small></span><span>${x.hot ? '●' : '›'}</span></button>`).join('')}</div>`;
+}
+
+function friendsView(){
+  R.view = 'friends';
+  const fr = friendList(), url = MYCODE ? SITE + '?amigo=' + MYCODE : '';
+  app.innerHTML = `<section class="screen">
+    <div class="top">${backBtn()}<span style="font-size:18px">Amigos</span><span style="width:44px"></span></div>
+    <div class="note" style="align-items:center;text-align:center;gap:6px"><span class="label">Tu código de amigo</span>
+      <span class="display" style="font-size:52px;line-height:1.05;letter-spacing:1px">${MYCODE ? esc(fmtCode(MYCODE)) : '…'}</span>
+      <span style="font-size:13px;color:var(--muted)">Dáselo a quien quieras. Solo hace falta una vez.</span>
+      ${MYCODE ? shareRow() : ''}</div>
+    <div class="field"><label class="label" for="fc">Agregar con su código</label>
+      <div style="display:flex;gap:8px"><input class="input" id="fc" autocomplete="off" autocapitalize="characters" placeholder="SOL·4821" style="flex:1;font-family:var(--display);font-size:24px;letter-spacing:1px">
+      <button class="pill solid" data-add style="min-height:56px;padding:0 18px">Agregar</button></div></div>
+    <div class="rows"><div class="label" style="padding-bottom:6px">Tus amigos</div>
+      ${fr.length ? fr.map(f => `<div class="r"><span class="fav">${avatar(f.face || 0, 'happy')}</span><div class="who"><b>${esc(f.name)}</b></div><button class="chip" data-duel-with="${esc(f.id)}">Duelo</button></div>`).join('')
+        : `<div class="r"><div class="who"><b>Todavía no tienes amigos aquí</b><span>Agrega un código, o juega un duelo con alguien y se guardará solo.</span></div></div>`}</div>
+    <p style="margin:0;font-size:13px;color:var(--muted);line-height:1.45">Tus amigos ven en su inicio los duelos que les pones y los retos que creas, sin enlaces.</p>
+  </section>`;
+  if (MYCODE) bindShare(url, `Agrégame en Ahorcado, mi código es ${fmtCode(MYCODE)}`);
+  const inp = $('#fc');
+  const add = async () => { const c = normCode(inp.value); if (!isFriendCode(c)){ toast('Escribe un código como SOL·4821'); inp.focus(); return; }
+    const btn = $('[data-add]'); btn.disabled = true;
+    try { const r = await addFriendByCode(c);
+      if (r === 'none') toast('No hay nadie con ese código'); else if (r === 'self') toast('Ese es tu código'); else { toast(r.name + ' ya es tu amigo'); friendsView(); return; } }
+    catch (e){ toast(dbErr(e)); }
+    btn.disabled = false; };
+  bind({ '[data-back]': goHome, '[data-add]': add, '[data-duel-with]': el => { R.duelTo = el.dataset.duelWith; R.view = 'duelNew'; render(); } });
+  inp.onkeydown = e => { if (e.key === 'Enter') add(); };
+  if (!MYCODE) ensurePlayer().then(c => { if (c && R.view === 'friends') friendsView(); });
+  loadInbox().then(() => { if (R.view === 'friends' && JSON.stringify(friendList()) !== JSON.stringify(fr) && !inp.value) friendsView(); });
+}
+
 let GROUP = store.get('ahorcado-group', null);
 const dayKey = (t = new Date()) => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 const MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -1041,8 +1192,17 @@ setInterval(() => {
 
 /* ===================== boot ===================== */
 const startCode = normCode(params.get('sala')), linkReto = normCode(params.get('reto')), linkDuel = normCode(params.get('duelo')), linkGroup = normCode(params.get('grupo'));
-const linkCode = linkReto || linkDuel || linkGroup || startCode;
+const linkFriend = normCode(params.get('amigo'));
+const linkCode = linkReto || linkDuel || linkGroup || startCode || linkFriend;
+async function befriend(c){
+  needName(async () => { loading('BUSCANDO…'); await ensurePlayer();
+    try { const r = await addFriendByCode(c);
+      if (r === 'none'){ failView('No encontramos a nadie con el código ' + fmtCode(c) + '.'); return; }
+      if (r !== 'self') setTimeout(() => toast(r.name + ' ya es tu amigo'), 200); friendsView(); }
+    catch (e){ failView(dbErr(e), () => befriend(c)); } });
+}
 function followLink(){
+  if (linkFriend){ befriend(linkFriend); return; }
   if (linkReto) needName(() => openReto(linkReto));
   else if (linkDuel) needName(() => openDuel(linkDuel));
   else if (linkGroup) needName(() => joinGroup(linkGroup));

@@ -10,7 +10,11 @@ El juego del ahorcado en español, para jugar con amigos, en vivo o cada uno a s
 - **Palabra del día:** one word a day, the same for your whole group. You get one try, and there's a group leaderboard and a streak.
 - **Practicar solo:** single-player practice.
 
-**Unirse con código** accepts any live room, reto or duelo code. Links work too: `?sala=`, `?reto=`, `?duelo=`, `?grupo=`.
+- **Amigos:** each player has a friend code like `SOL·4821`. Add someone once, by code or with their `?amigo=` link, and after that duels you set for them and retos you create show up on their home screen, with no links. Anyone you've had a duel with becomes a friend automatically.
+
+**Tus partidas** on the home screen lists your duels and retos, plus your friends' retos. Anything waiting for you moves to the top.
+
+**Unirse con código** accepts any live room, reto, duelo, group or friend code. Links work too: `?sala=`, `?reto=`, `?duelo=`, `?grupo=`.
 
 ## Install it on your phone
 
@@ -53,7 +57,7 @@ The play-in-your-own-time modes save results in Supabase. Open Supabase → **SQ
 - **Files:** it's a static web app (`index.html` and `words.js`), hosted on GitHub Pages.
 - **Live play:** it uses Supabase Realtime. Presence shows who is in the room, and broadcast carries game moves.
 - **Host:** in a live room, the player who has been in the room longest runs the game. If they leave, the next player takes over automatically.
-- **Saved games:** retos, duelos and daily results are kept in five tables (see `setup.sql`). Each phone gets a saved player ID, so nobody needs an account.
+- **Saved games:** retos, duelos, daily results, players and friendships are kept in seven tables (see `setup.sql`). Each phone gets a saved player ID, so nobody needs an account.
 - **Supabase key:** the key in `index.html` is Supabase's *publishable* key, which is meant to be public. The tables let the app read and add rows but not delete them.
 
 ## Test mode
