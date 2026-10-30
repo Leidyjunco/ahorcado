@@ -1,14 +1,18 @@
 # Ahorcado
 
-El juego del ahorcado en español, en vivo con amigos. A Spanish-learning Hangman game for phones, played live with friends.
+El juego del ahorcado en español, para jugar con amigos, en vivo o cada uno a su ritmo. A Spanish-learning Hangman game for phones.
 
-## How to play
+## Ways to play
 
-- **Crear sala** creates a room with a code like `TACO·42`. Share the code or the link.
-- **Unirse con código** joins a friend's room.
-- **Practicar solo** is single-player practice.
+- **En vivo:** a fast live room. Everyone plays at the same time with a room code like `TACO·42`.
+- **Reto:** the same 3, 5 or 10 words for everyone, played whenever you like before a deadline (24 hours, 3 days or 1 week), with a shared leaderboard.
+- **Duelo:** two players set Spanish words, each with an English clue, for each other, taking turns at their own pace.
+- **Palabra del día:** one word a day, the same for your whole group. You get one try, and there's a group leaderboard and a streak.
+- **Practicar solo:** single-player practice.
 
-## Settings
+**Unirse con código** accepts any live room, reto or duelo code. Links work too: `?sala=`, `?reto=`, `?duelo=`, `?grupo=`.
+
+## Live room settings
 
 - **Levels:** Fácil (8 tries), Medio (6) or Difícil (5).
 - **What to guess:** single words, several words (expressions) or full sentences. Longer content gets 1–2 extra tries.
@@ -19,21 +23,33 @@ El juego del ahorcado en español, en vivo con amigos. A Spanish-learning Hangma
 
 ## Scoring
 
+Live rooms:
 - **Letters:** 10 points for each correct letter, multiplied by how many times it appears in the word.
 - **Solving:** 100 points for solving the word.
 - **First to finish:** in Carrera and Uno elige, the first person to complete the word gets +50 and the round ends for everyone, moving on to the next word.
 - **Uno elige:** the word setter gets +30 for each player who guesses their word.
 
+Reto, Duelo and Palabra del día:
+- **Letters:** 10 points for each correct letter, multiplied by how many times it appears in the word.
+- **Solving:** 100 points.
+- **Accuracy:** +10 for each try you have left.
+- **Speed:** a bonus of up to +50, which drops the longer you take.
+
+## Setup (once)
+
+The play-in-your-own-time modes save results in Supabase. Open Supabase → **SQL Editor** → **New query**, paste all of `setup.sql`, and click **Run**. Live rooms don't need this.
+
 ## How it works
 
 - **Files:** it's a static web app (`index.html` and `words.js`), hosted on GitHub Pages.
-- **Live play:** it uses Supabase Realtime. Presence shows who is in the room, and broadcast carries game moves. No database tables are needed.
-- **Host:** the player who has been in the room longest runs the game. If they leave, the next player takes over automatically.
-- **Supabase key:** the key in `index.html` is Supabase's *publishable* key, which is meant to be public.
+- **Live play:** it uses Supabase Realtime. Presence shows who is in the room, and broadcast carries game moves.
+- **Host:** in a live room, the player who has been in the room longest runs the game. If they leave, the next player takes over automatically.
+- **Saved games:** retos, duelos and daily results are kept in five tables (see `setup.sql`). Each phone gets a saved player ID, so nobody needs an account.
+- **Supabase key:** the key in `index.html` is Supabase's *publishable* key, which is meant to be public. The tables let the app read and add rows but not delete them.
 
 ## Test mode
 
-Add `?local` to the URL to play between browser tabs on one computer, with no network needed.
+Add `?local` to the URL to play between browser tabs on one computer, with no network needed. Add `&pid=x` to act as a different player.
 
 ## Editing words
 

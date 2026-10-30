@@ -95,6 +95,7 @@ a{color:var(--fg)}
 .key[disabled]:not(.hit):not(.miss){opacity:.35}
 .banner{align-self:center;padding:8px 14px;border-radius:999px;font-size:14px;border:1.5px solid var(--line)}
 .banner.mine{background:var(--fg);color:#000;border-color:var(--fg)}
+.tags span span{border:0;padding:0;font-size:inherit;color:inherit}
 .rows .r{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--faint)}
 .rows .rk{font-family:var(--display);font-size:20px;width:22px;color:rgba(242,242,242,.5)}
 .rows .who{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
@@ -113,6 +114,25 @@ a{color:var(--fg)}
 @keyframes bounce{0%{transform:scale(.9)}100%{transform:scale(1)}}
 .bounce{animation:bounce .45s cubic-bezier(.3,1.6,.5,1)}
 @media (prefers-reduced-motion:reduce){.bounce{animation:none}}
+.modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;flex:none}
+.mcard{display:flex;flex-direction:column;align-items:flex-start;gap:5px;padding:14px;border-radius:22px;border:1.5px solid var(--faint);text-align:left;background:linear-gradient(180deg,#151515,#0a0a0a);min-width:0}
+.mcard b{font-family:var(--display);font-weight:400;font-size:25px;line-height:1;letter-spacing:.3px}
+.mcard span{font-size:13px;color:var(--muted);line-height:1.3}
+.mcard.live{background:var(--fg);color:#000;border-color:var(--fg)}
+.mcard.live span{color:rgba(0,0,0,.66)}
+.mine{display:flex;flex-direction:column;flex:none}
+.mine button{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 2px;border-top:1px solid var(--faint);text-align:left;font-size:15px}
+.mine button span:last-child{color:var(--muted);font-size:13px;white-space:nowrap}
+.lb .r svg{width:34px;height:34px;flex:none}
+.sq{letter-spacing:2px;font-size:12px}
+.vs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;flex:none}
+.vs .p{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.vs .p svg{width:68px;height:68px}
+.vs .p b{font-family:var(--display);font-weight:400;font-size:34px;line-height:1}
+.vs .p span{font-size:14px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note{border:1.5px solid var(--faint);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:8px;flex:none}
+.note p{margin:0;line-height:1.45}
+.hist .r{align-items:flex-start}
 @media (max-height:700px){.stage svg{max-height:200px}}
 </style>
 </head>
@@ -369,7 +389,8 @@ setInterval(() => {
   } else if (S.phase === 'roundEnd' && now > S.nextAt) nextRound();
 }, 500);
 // live countdown labels
-setInterval(() => { document.querySelectorAll('[data-until]').forEach(el => { const s = Math.max(0, Math.ceil((+el.dataset.until - Date.now())/1000)); el.textContent = el.dataset.fmt === 'clock' ? Math.floor(s/60)+':'+String(s%60).padStart(2,'0') : s+' s'; }); }, 250);
+setInterval(() => { document.querySelectorAll('[data-until]').forEach(el => { const s = Math.max(0, Math.ceil((+el.dataset.until - Date.now())/1000)); el.textContent = el.dataset.fmt === 'clock' ? Math.floor(s/60)+':'+String(s%60).padStart(2,'0') : el.dataset.fmt === 'long' ? longTime(s) : s+' s'; }); }, 250);
+function longTime(s){ const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60); return d ? `${d} d ${h} h` : h ? `${h} h ${m} min` : `${m} min`; }
 
 /* ===================== screens ===================== */
 const app = $('#app');
@@ -380,6 +401,11 @@ function render(){
   if (v === 'create') return createView();
   if (v === 'join') return joinView();
   if (v === 'room') return roomView();
+  if (v === 'retoNew') return retoNewView();
+  if (v === 'reto') return retoView();
+  if (v === 'duelNew') return duelNewView();
+  if (v === 'duel') return duelView();
+  if (v === 'daily') return dailyView();
 }
 function bind(map){ for (const [sel, fn] of Object.entries(map)) app.querySelectorAll(sel).forEach(el => el.onclick = e => fn(el, e)); }
 const backBtn = (label='Volver') => `<button class="ring" data-back aria-label="${label}">${ICON.back}</button>`;
@@ -388,16 +414,23 @@ function homeView(){
   app.innerHTML = `<section class="screen">
     <div class="top"><span class="label">Juego de palabras</span>
       ${me.name ? `<button class="chip" data-profile style="padding:8px 12px;font-size:14px;display:flex;gap:8px;align-items:center"><span style="width:26px;height:26px;display:inline-block">${avatar(me.face)}</span>${esc(me.name)}</button>` : ''}</div>
-    <div class="stage" style="min-height:220px">${hangman(6,'neutral',false,'Dibujo a mano del ahorcado')}</div>
-    <div class="grid3 label" style="letter-spacing:.08em;font-size:11px;color:rgba(242,242,242,.75);flex:none"><span>Adivina la palabra</span><span style="text-align:center">En español</span><span style="text-align:right">Con amigos, en vivo</span></div>
-    <h1 class="wordmark" style="font-size:min(84px,21vw);margin:0 -4px">AHO<span class="slant">R</span><span class="slant">C</span>ADO</h1>
-    <div style="display:flex;flex-direction:column;gap:12px;margin-top:auto">
-      <button class="pill solid" data-go="create">Crear sala</button>
+    <div class="stage" style="min-height:190px;flex:none;height:190px">${hangman(6,'neutral',false,'Dibujo a mano del ahorcado')}</div>
+    <div class="grid3 label" style="letter-spacing:.08em;font-size:11px;color:rgba(242,242,242,.75);flex:none"><span>Adivina la palabra</span><span style="text-align:center">En español</span><span style="text-align:right">Con amigos</span></div>
+    <h1 class="wordmark" style="font-size:min(84px,21vw);margin:0 -4px;flex:none">AHO<span class="slant">R</span><span class="slant">C</span>ADO</h1>
+    <div class="modes">
+      <button class="mcard live" data-go="create"><b>EN VIVO</b><span>Partida rápida, todos a la vez</span></button>
+      <button class="mcard" data-go="retoNew"><b>RETO</b><span>Las mismas palabras, cada uno a su ritmo</span></button>
+      <button class="mcard" data-go="duelNew"><b>DUELO</b><span>Os ponéis palabras por turnos</span></button>
+      <button class="mcard" data-go="daily"><b>PALABRA DEL DÍA</b><span>${playedToday() ? 'Hoy ya jugaste ✓' : 'Una al día, con tu grupo'}</span></button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;flex:none">
       <button class="pill ghost" data-go="join">Unirse con código</button>
       <button class="link" data-go="solo">Practicar solo</button>
-    </div></section>`;
+    </div>
+    ${mineList()}</section>`;
   fitWordmark();
-  bind({ '[data-go]': el => needName(() => { const g = el.dataset.go; if (g==='solo'){ R.soloSetup = true; R.view = 'create'; } else { R.soloSetup = false; R.view = g; } render(); }),
+  bind({ '[data-go]': el => needName(() => { const g = el.dataset.go; if (g==='solo'){ R.soloSetup = true; R.view = 'create'; } else if (g === 'daily'){ openDaily(); return; } else { R.soloSetup = false; R.view = g; } render(); }),
+         '[data-mine]': el => needName(() => { const [t, id] = el.dataset.mine.split(':'); t === 'reto' ? openReto(id) : openDuel(id); }),
          '[data-profile]': () => { R.afterName = () => { R.view = 'home'; render(); }; R.view = 'name'; render(); } });
 }
 // shrink the big AHORCADO until it fits the screen width, whichever font the phone ended up using
@@ -451,12 +484,15 @@ function createView(){
 function joinView(){
   app.innerHTML = `<section class="screen">
     <div class="top">${backBtn()}<span style="font-size:18px">Unirse</span><span style="width:44px"></span></div>
-    <h2 class="display" style="font-size:54px">CÓDIGO<br>DE SALA</h2>
+    <h2 class="display" style="font-size:54px">ESCRIBE<br>EL CÓDIGO</h2>
     <div class="field"><label class="label" for="code">Código</label><input class="input" id="code" autocomplete="off" autocapitalize="characters" placeholder="TACO·42" value="${esc(R.pendingJoin ? fmtCode(R.pendingJoin) : '')}" style="font-family:var(--display);font-size:30px;letter-spacing:1px;height:68px"></div>
-    <span style="font-size:14px;color:var(--muted)">Pide el código a quien creó la sala, o abre el enlace que te mandó.</span>
+    <span style="font-size:14px;color:var(--muted)">Sirve para salas en vivo, retos y duelos. Pide el código a quien lo creó, o abre el enlace que te mandó.</span>
     <button class="pill solid" id="go" style="margin-top:auto">Entrar</button></section>`;
   const inp = $('#code'); if (!R.pendingJoin) inp.focus();
-  const go = () => { const c = normCode(inp.value); if (c.length < 3){ toast('Escribe el código de la sala'); inp.focus(); return; } R.pendingJoin = null; enterRoom(c, null); };
+  const go = async () => { const c = normCode(inp.value); if (c.length < 3){ toast('Escribe el código'); inp.focus(); return; } R.pendingJoin = null;
+    // a code can be a challenge, a duel or a live room
+    try { if (await DB.get('challenges', c)) return openReto(c); if (await DB.get('duels', c)) return openDuel(c); } catch(e){}
+    enterRoom(c, null); };
   bind({ '[data-back]': () => { R.pendingJoin = null; R.view='home'; render(); }, '#go': go });
   inp.onkeydown = e => { if (e.key === 'Enter') go(); };
 }
@@ -576,7 +612,7 @@ function playView(){
   bind({ '[data-leave]': () => leaveRoom(), '[data-k]': el => act({type:'guess', k:el.dataset.k}) });
 }
 addEventListener('keydown', e => {
-  if (R.view !== 'room' || R.S?.phase !== 'play' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!((R.view === 'room' && R.S?.phase === 'play') || R.view === 'puzzle') || e.metaKey || e.ctrlKey || e.altKey) return;
   if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
   const k = e.key.toLowerCase(); const b = app.querySelector(`.key[data-k="${k}"]`);
   if (b && !b.disabled) b.click();
@@ -613,10 +649,350 @@ function finalView(){
   bind({ '[data-leave]': () => leaveRoom(), '[data-again]': () => act({type:'start'}) });
 }
 
+/* ===================== play in your own time: Reto · Duelo · Palabra del día ===================== */
+// A lasting player id per phone (live rooms use a per-tab id instead)
+let PID = (LOCAL && params.get('pid')) || store.get('ahorcado-pid', null);
+if (!PID){ PID = uid() + uid(); store.set('ahorcado-pid', PID); }
+const SITE = location.origin + location.pathname;
+const asyncCode = () => rnd(CODE_WORDS) + String(100 + Math.floor(Math.random()*900));
+const kindName = k => KINDS.find(x => x[0] === k)[1];
+const wordTries = es => { const n = es.trim().split(/\s+/).length; return 6 + (n > 3 ? 2 : n > 1 ? 1 : 0); };
+function setURL(q){ history.replaceState(null, '', location.pathname + '?' + q + (LOCAL ? '&local' + (params.get('pid') ? '&pid=' + params.get('pid') : '') : '')); }
+function goHome(){ R.view = 'home'; history.replaceState(null, '', location.pathname + (LOCAL ? '?local' + (params.get('pid') ? '&pid=' + params.get('pid') : '') : '')); render(); }
+
+// Saved games live in Supabase tables (see setup.sql); ?local uses this browser's storage instead, for testing.
+const DB = LOCAL ? (() => {
+  const all = t => store.get('ahdb-' + t, []), save = (t, a) => store.set('ahdb-' + t, a);
+  const uniq = { results: ['challenge_id','player_id'], daily_results: ['day','group_code','player_id'] };
+  return {
+    get: async (t, id) => all(t).find(r => r.id === id) || null,
+    list: async (t, col, val) => all(t).filter(r => r[col] === val),
+    list2: async (t, a, av, b, bv) => all(t).filter(r => r[a] === av && r[b] === bv),
+    insert: async (t, row) => { const a = all(t);
+      if (row.id != null && a.some(r => r.id === row.id)) throw {code:'23505'};
+      if (uniq[t] && a.some(r => uniq[t].every(k => r[k] === row[k]))) throw {code:'23505'};
+      row = {...row, id: row.id ?? Date.now() + Math.random(), created_at: new Date().toISOString()}; a.push(row); save(t, a); return row; },
+    update: async (t, id, patch) => { const a = all(t), r = a.find(x => x.id === id); if (!r) return null; Object.assign(r, patch); save(t, a); return r; }
+  };
+})() : (() => {
+  const c = () => (supa = supa || window.supabase.createClient(SUPA_URL, SUPA_KEY));
+  const q = async p => { const { data, error } = await p; if (error) throw error; return data; };
+  return {
+    get: (t, id) => q(c().from(t).select('*').eq('id', id).maybeSingle()),
+    list: (t, col, val) => q(c().from(t).select('*').eq(col, val).order('created_at', { ascending: true })),
+    list2: (t, a, av, b, bv) => q(c().from(t).select('*').eq(a, av).eq(b, bv).order('created_at', { ascending: true })),
+    insert: (t, row) => q(c().from(t).insert(row).select().single()),
+    update: async (t, id, patch) => (await q(c().from(t).update(patch).eq('id', id).select()))[0] || null
+  };
+})();
+const dbErr = e => { console.error(e); const m = (e && (e.message || e.code)) || '';
+  return /42P01|PGRST20|relation|does not exist|schema cache|Could not find the table/i.test(m)
+    ? 'Esta parte del juego todavía no tiene su base de datos. Hay que ejecutar setup.sql en Supabase una vez.'
+    : 'No se pudo conectar. Revisa tu internet e inténtalo otra vez.'; };
+
+function remember(type, id){ const m = store.get('ahorcado-mine', []).filter(x => !(x.type === type && x.id === id)); m.unshift({ type, id, at: Date.now() }); store.set('ahorcado-mine', m.slice(0, 10)); }
+function mineList(){
+  const m = store.get('ahorcado-mine', []); if (!m.length) return '';
+  return `<div class="mine"><span class="label" style="padding-bottom:6px">Tus partidas</span>${m.slice(0,6).map(x => `<button data-mine="${x.type}:${esc(x.id)}"><span>${x.type === 'reto' ? 'Reto' : 'Duelo'} ${esc(fmtCode(x.id))}</span><span>Abrir</span></button>`).join('')}</div>`;
+}
+function loading(t){ app.innerHTML = `<section class="screen" style="align-items:center;justify-content:center;text-align:center"><div class="stage" style="flex:none;height:200px">${hangman(1,'neutral',true)}</div><span class="hand" style="font-size:28px">${t || 'UN MOMENTO…'}</span></section>`; }
+function failView(msg, retry){
+  app.innerHTML = `<section class="screen" style="justify-content:center;gap:18px"><div class="stage" style="flex:none;height:200px">${hangman(6,'sad',false)}</div>
+    <h2 class="display" style="font-size:42px;text-align:center">VAYA.</h2><p class="err">${esc(msg)}</p>
+    ${retry ? '<button class="pill solid" data-retry>Reintentar</button>' : ''}<button class="link" data-home>Volver al inicio</button></section>`;
+  bind({ '[data-retry]': () => retry(), '[data-home]': goHome });
+}
+function copyText(t, ok){ (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast(ok || 'Copiado')).catch(() => toast(t)); }
+function shareRow(){ return `<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;flex:none"><button class="chip" data-copy-url style="display:flex;gap:8px;align-items:center">${ICON.copy}Copiar enlace</button>${navigator.share ? `<button class="chip" data-share-url style="display:flex;gap:8px;align-items:center">${ICON.share}Compartir</button>` : ''}</div>`; }
+function bindShare(url, text){ bind({ '[data-copy-url]': () => copyText(url, 'Enlace copiado'), '[data-share-url]': () => navigator.share({ title: 'Ahorcado', text, url }).catch(() => {}) }); }
+const squares = det => det.map(d => d.s ? '■' : '□').join('');
+
+// Points for one word played on your own: letters, solving, fewer mistakes, and a little for speed
+function scoreWord(word, g, miss, tries, ms, solved){
+  const L = lettersOf(word); let pts = 0; for (const k of g) if (L.has(k)) pts += 10 * occ(word, k);
+  if (solved) pts += 100 + Math.max(0, tries - miss) * 10 + Math.max(0, 50 - Math.floor(ms / 2000));
+  return pts;
+}
+// One word, played alone. o = { item:[es,en,ex?,exEn?], tries, title, sub, label, next, onDone(result), onQuit }
+function puzzle(o){
+  const st = { g: [], miss: 0, t0: Date.now(), done: false, res: null };
+  R.view = 'puzzle';
+  const draw = () => {
+    const word = o.item[0], L = lettersOf(word), guessed = new Set(st.g);
+    const won = [...L].every(c => guessed.has(c)), lost = st.miss >= o.tries;
+    let anim = '';
+    if (!st.done && (won || lost)){ st.done = true; anim = 'bounce'; const ms = Date.now() - st.t0; st.res = { solved: won, miss: st.miss, ms, pts: scoreWord(word, st.g, st.miss, o.tries, ms, won) }; }
+    const mood = won ? 'happy' : (lost || st.miss / o.tries >= .6) ? 'sad' : 'neutral';
+    app.innerHTML = `<section class="screen" style="gap:10px">
+      <div class="top"><span class="display" style="font-size:24px;letter-spacing:.5px">${o.title}</span>
+        <span style="display:flex;align-items:center;gap:8px;font-size:15px;font-variant-numeric:tabular-nums">${o.sub || ''}<button class="ring" data-quit aria-label="Salir" style="width:36px;height:36px">${ICON.back}</button></span></div>
+      <div class="stage ${anim}">${hangman(partsFor(st.miss, o.tries, lost), mood, !won, `Ahorcado: ${partsFor(st.miss, o.tries, lost)} de 6 partes dibujadas`)}<span class="remark">${remarkFor(st.miss, o.tries, won, lost)}</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:none"><span class="label">${esc(o.label || '')}${o.label ? ' · ' : ''}${Math.max(0, o.tries - st.miss)} intentos</span><span class="clue">“${esc(o.item[1] || '')}”</span></div>
+      ${slotsHtml(word, guessed, lost)}
+      ${st.done ? `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;flex:none">
+          <strong style="font-weight:400;font-size:20px">${won ? '¡Lo tienes! +' + st.res.pts + ' pts' : 'Era “' + esc(word) + '”' + (st.res.pts ? ' · +' + st.res.pts + ' pts' : '')}</strong>
+          ${o.item[2] ? `<span style="font-size:16px">${esc(o.item[2])}</span><span style="color:var(--muted);font-size:14px">${esc(o.item[3] || '')}</span>` : ''}</div>
+          <button class="pill solid" data-next style="margin-top:auto">${o.next || 'Seguir'}</button>`
+        : `<span class="feed"></span>${keyboard(word, guessed, true)}`}
+    </section>`;
+    bind({ '[data-k]': el => { if (st.done) return; const k = el.dataset.k; if (st.g.includes(k)) return; st.g.push(k); if (!L.has(k)) st.miss++; draw(); },
+           '[data-next]': () => o.onDone(st.res), '[data-quit]': () => (o.onQuit || goHome)() });
+  };
+  draw();
+}
+
+/* ---------- Reto: the same words for everyone, each plays when they like ---------- */
+const retoSetup = store.get('ahorcado-reto-setup', { level: 1, kind: 'palabra', count: 5, hours: 24 });
+function retoNewView(){
+  const s = retoSetup;
+  app.innerHTML = `<section class="screen">
+    <div class="top">${backBtn()}<span style="font-size:18px">Nuevo reto</span><span style="width:44px"></span></div>
+    <h2 class="display" style="font-size:54px">CREA UN<br>RETO</h2>
+    <p style="margin:0;color:var(--muted);line-height:1.45">Todos juegan las mismas palabras, cada uno cuando quiera. Gana quien más puntos saque antes de que termine.</p>
+    <div class="field"><span class="label">Nivel</span><div class="grid3">${LEVELS.map(([n], i) => `<button class="opt" data-level="${i}" aria-pressed="${s.level === i}"><span style="font-size:17px">${n}</span><small>${BASE_TRIES[i]} intentos</small></button>`).join('')}</div></div>
+    <div class="field"><span class="label">Qué adivinar</span><div style="display:flex;flex-wrap:wrap;gap:8px">${KINDS.map(([k, n]) => `<button class="chip" data-kind="${k}" aria-pressed="${s.kind === k}">${n}</button>`).join('')}</div></div>
+    <div class="field"><span class="label">Palabras</span><div style="display:flex;gap:8px">${[3, 5, 10].map(n => `<button class="chip" data-count="${n}" aria-pressed="${s.count === n}">${n}</button>`).join('')}</div></div>
+    <div class="field"><span class="label">Termina en</span><div style="display:flex;flex-wrap:wrap;gap:8px">${[[24, '24 horas'], [72, '3 días'], [168, '1 semana']].map(([h, n]) => `<button class="chip" data-hours="${h}" aria-pressed="${s.hours === h}">${n}</button>`).join('')}</div></div>
+    <button class="pill solid" id="go" style="margin-top:auto">Crear reto</button></section>`;
+  const save = () => { store.set('ahorcado-reto-setup', s); render(); };
+  bind({ '[data-back]': goHome,
+    '[data-level]': el => { s.level = +el.dataset.level; save(); }, '[data-kind]': el => { s.kind = el.dataset.kind; save(); },
+    '[data-count]': el => { s.count = +el.dataset.count; save(); }, '[data-hours]': el => { s.hours = +el.dataset.hours; save(); },
+    '#go': async () => {
+      loading('CREANDO EL RETO…');
+      const items = shuffle(BANK[s.kind][s.level]).slice(0, s.count);
+      for (let attempt = 0; attempt < 3; attempt++){
+        const id = asyncCode();
+        try { await DB.insert('challenges', { id, creator_id: PID, creator_name: me.name, creator_face: me.face, settings: { level: s.level, kind: s.kind, count: s.count }, items, expires_at: new Date(Date.now() + s.hours * 3600e3).toISOString() });
+          remember('reto', id); openReto(id); return; }
+        catch (e){ if (e.code !== '23505'){ failView(dbErr(e), () => { R.view = 'retoNew'; render(); }); return; } }
+      }
+      failView('No se pudo crear el reto. Inténtalo otra vez.', () => { R.view = 'retoNew'; render(); });
+    } });
+}
+function openReto(id){ R.view = 'reto'; R.retoId = id; R.retoData = null; setURL('reto=' + id); render(); }
+async function retoView(){
+  const id = R.retoId; if (!R.retoData) loading();
+  try {
+    const ch = await DB.get('challenges', id);
+    if (R.view !== 'reto' || R.retoId !== id) return;
+    if (!ch){ failView('No encontramos ese reto. Revisa el código o el enlace.'); return; }
+    const res = await DB.list('results', 'challenge_id', id);
+    if (R.view !== 'reto' || R.retoId !== id) return;
+    R.retoData = { ch, res }; remember('reto', id); drawReto(ch, res);
+  } catch (e){ failView(dbErr(e), () => render()); }
+}
+function drawReto(ch, res){
+  const mine = res.find(r => r.player_id === PID), ended = Date.now() > Date.parse(ch.expires_at);
+  const rows = res.slice().sort((a, b) => b.score - a.score);
+  const url = SITE + '?reto=' + ch.id;
+  const myText = mine ? `AHORCADO · Reto ${fmtCode(ch.id)}\n${squares(mine.detail || [])} · ${mine.score} pts\n${url}` : '';
+  app.innerHTML = `<section class="screen">
+    <div class="top">${backBtn('Volver al inicio')}<span class="label">Reto</span><span style="width:44px"></span></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:none">
+      <span class="display" style="font-size:72px;line-height:1;letter-spacing:1px">${esc(fmtCode(ch.id))}</span>
+      <span style="font-size:14px;color:var(--muted)">Creado por ${ch.creator_id === PID ? 'ti' : esc(ch.creator_name)}</span></div>
+    <div class="tags"><span>${LEVELS[ch.settings.level][0]}</span><span>${kindName(ch.settings.kind)}</span><span>${ch.settings.count} palabras</span><span>${ended ? 'Terminado' : `Termina en <span data-until="${Date.parse(ch.expires_at)}" data-fmt="long">${longTime(Math.max(0, (Date.parse(ch.expires_at) - Date.now()) / 1000))}</span>`}</span></div>
+    ${shareRow()}
+    <div class="rows lb"><div class="label" style="display:flex;justify-content:space-between;padding-bottom:6px"><span>Clasificación</span><span>${res.length} ${res.length === 1 ? 'jugador' : 'jugadores'}</span></div>
+      ${rows.length ? rows.map((r, i) => `<div class="r"><span class="rk">${i + 1}</span>${avatar(r.face, i === 0 ? 'happy' : 'neutral')}<div class="who"><b>${r.player_id === PID ? 'Tú' : esc(r.player_name)}</b><span class="sq">${squares(r.detail || [])}</span></div><span class="tot">${r.score}</span></div>`).join('')
+        : `<div class="r"><div class="who"><b>Nadie ha jugado todavía</b><span>Juega y comparte el enlace con tus amigos.</span></div></div>`}</div>
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:10px">
+      ${mine ? `<button class="pill solid" data-share-res>Compartir mi resultado</button>`
+        : ended ? `<span class="banner" style="align-self:stretch;text-align:center;border-radius:18px">Este reto ya terminó.</span>`
+        : `<button class="pill solid" data-play>Jugar el reto</button>`}
+    </div></section>`;
+  bindShare(url, `Te reto al ahorcado en español: ${fmtCode(ch.id)}`);
+  bind({ '[data-back]': goHome, '[data-play]': () => playReto(ch),
+    '[data-share-res]': () => navigator.share ? navigator.share({ title: 'Ahorcado', text: myText }).catch(() => {}) : copyText(myText, 'Resultado copiado') });
+}
+function playReto(ch){
+  const det = [], n = ch.items.length, tries = triesOf(ch.settings); let i = 0;
+  const step = () => puzzle({ item: ch.items[i], tries, title: 'RETO ' + fmtCode(ch.id), sub: `${i + 1} / ${n}`,
+    label: `${LEVELS[ch.settings.level][0]} · ${kindName(ch.settings.kind)}`, next: i + 1 < n ? 'Siguiente palabra' : 'Ver resultados',
+    onQuit: () => openReto(ch.id),
+    onDone: async r => {
+      det.push({ s: r.solved ? 1 : 0, m: r.miss, p: r.pts }); i++;
+      if (i < n){ step(); return; }
+      const save = async () => { loading('GUARDANDO…');
+        try { await DB.insert('results', { challenge_id: ch.id, player_id: PID, player_name: me.name, face: me.face, score: det.reduce((a, d) => a + d.p, 0), detail: det }); }
+        catch (e){ if (e.code !== '23505'){ failView(dbErr(e), save); return; } }
+        openReto(ch.id); };
+      save();
+    } });
+  step();
+}
+
+/* ---------- Duelo: two players set words for each other, taking turns ---------- */
+function wordForm(title, intro, btn){
+  return `<h2 class="display" style="font-size:48px">${title}</h2>
+    <p style="margin:0;color:var(--muted);line-height:1.45">${intro}</p>
+    <div class="field"><label class="label" for="es">En español</label><input class="input" id="es" maxlength="60" autocomplete="off" placeholder="p. ej. la mariposa"></div>
+    <div class="field"><label class="label" for="en">Pista en inglés</label><input class="input" id="en" maxlength="60" autocomplete="off" placeholder="p. ej. the butterfly"></div>
+    <button class="link" data-rand style="align-self:flex-start;padding-left:0">Elegir una al azar</button>
+    <button class="pill solid" data-send style="margin-top:auto">${btn}</button>`;
+}
+function readWordForm(){
+  const es = $('#es').value.trim().slice(0, 60), en = $('#en').value.trim().slice(0, 60);
+  if (!lettersOf(es).size){ toast('Escribe una palabra en español'); $('#es').focus(); return null; }
+  return { es, en: en || '(sin pista)' };
+}
+function bindRandomWord(){ bind({ '[data-rand]': () => { const k = rnd(['palabra', 'palabra', 'varias']), it = rnd(BANK[k][rnd([0, 1, 1, 2])]); $('#es').value = it[0]; $('#en').value = it[1]; } }); }
+function duelNewView(){
+  app.innerHTML = `<section class="screen"><div class="top">${backBtn()}<span style="font-size:18px">Nuevo duelo</span><span style="width:44px"></span></div>
+    ${wordForm('PON LA<br>PRIMERA', 'Escribe una palabra o frase en español para tu amigo, con una pista en inglés. Cuando la adivine, te pondrá una a ti.', 'Crear duelo')}</section>`;
+  bindRandomWord();
+  bind({ '[data-back]': goHome, '[data-send]': async () => {
+    const w = readWordForm(); if (!w) return; loading('CREANDO EL DUELO…');
+    for (let attempt = 0; attempt < 3; attempt++){
+      const id = asyncCode();
+      try { await DB.insert('duels', { id, a_id: PID, a_name: me.name, a_face: me.face });
+        await DB.insert('duel_turns', { duel_id: id, setter_id: PID, setter_name: me.name, es: w.es, en: w.en });
+        remember('duelo', id); openDuel(id); return; }
+      catch (e){ if (e.code !== '23505'){ failView(dbErr(e), () => { R.view = 'duelNew'; render(); }); return; } }
+    }
+    failView('No se pudo crear el duelo. Inténtalo otra vez.', () => { R.view = 'duelNew'; render(); });
+  } });
+}
+function openDuel(id){ R.view = 'duel'; R.duelId = id; R.duelData = null; setURL('duelo=' + id); render(); }
+async function duelView(){
+  const id = R.duelId; if (!R.duelData) loading();
+  try {
+    let d = await DB.get('duels', id);
+    if (R.view !== 'duel' || R.duelId !== id) return;
+    if (!d){ failView('No encontramos ese duelo. Revisa el código o el enlace.'); return; }
+    if (d.a_id !== PID && !d.b_id){ d = (await DB.update('duels', id, { b_id: PID, b_name: me.name, b_face: me.face })) || await DB.get('duels', id); }
+    const turns = (await DB.list('duel_turns', 'duel_id', id)).sort((x, y) => (x.created_at < y.created_at ? -1 : 1));
+    if (R.view !== 'duel' || R.duelId !== id) return;
+    R.duelData = { d, turns }; remember('duelo', id); drawDuel(d, turns);
+  } catch (e){ failView(dbErr(e), () => render()); }
+}
+function drawDuel(d, turns){
+  const amA = d.a_id === PID, amB = d.b_id === PID, inDuel = amA || amB;
+  const other = amA ? (d.b_name || 'tu amigo') : d.a_name;
+  const pts = id => turns.filter(t => t.solver_id === id).reduce((a, t) => a + (t.pts || 0), 0);
+  const last = turns[turns.length - 1], url = SITE + '?duelo=' + d.id;
+  let action = '';
+  if (!inDuel) action = `<div class="note"><p>Este duelo es entre ${esc(d.a_name)} y ${esc(d.b_name)}. Crea el tuyo desde el inicio.</p></div>`;
+  else if (last && !last.answered_at){
+    action = last.setter_id === PID
+      ? `<div class="note"><span class="label">Esperando</span><p>Le pusiste <b>“${esc(last.es)}”</b> a ${esc(other)}. Cuando la adivine, te tocará a ti.</p>${d.b_id ? '' : '<p style="color:var(--muted)">Mándale el enlace para que empiece.</p>'}</div>`
+      : `<div class="note"><span class="label">Te toca adivinar</span><p>${esc(last.setter_name)} te puso una palabra. Pista: <b>“${esc(last.en)}”</b></p></div><button class="pill solid" data-guess style="margin-top:auto">Adivinar</button>`;
+  } else {
+    const nextSetter = last ? last.solver_id : d.a_id;
+    action = nextSetter === PID
+      ? `<div class="note"><span class="label">Te toca poner una palabra</span><p>Escríbele una palabra o frase a ${esc(other)}.</p></div><button class="pill solid" data-write style="margin-top:auto">Poner una palabra</button>`
+      : `<div class="note"><span class="label">Esperando</span><p>${esc(other)} te está buscando una palabra.</p></div>`;
+  }
+  const hist = turns.slice().reverse().map(t => {
+    const hidden = !t.answered_at && t.setter_id !== PID;
+    const solver = t.solver_name || (t.setter_id === d.a_id ? (d.b_name || '…') : d.a_name);
+    return `<div class="r"><div class="who"><b>${t.setter_id === PID ? 'Tú' : esc(t.setter_name)} → ${t.solver_id === PID || (!t.solver_id && t.setter_id !== PID) ? 'tú' : esc(solver)}</b>
+      <span>${hidden ? 'Palabra secreta · por adivinar' : `“${esc(t.es)}” · ${esc(t.en)}`}</span></div>
+      <span class="tag ${t.answered_at && t.solved ? 'on' : 'off'}">${!t.answered_at ? 'Pendiente' : t.solved ? '+' + t.pts : 'No salió' + (t.pts ? ' +' + t.pts : '')}</span></div>`;
+  }).join('');
+  app.innerHTML = `<section class="screen">
+    <div class="top">${backBtn('Volver al inicio')}<span class="label">Duelo ${esc(fmtCode(d.id))}</span><span style="width:44px"></span></div>
+    <div class="vs"><div class="p">${avatar(d.a_face, 'happy')}<span>${amA ? 'Tú' : esc(d.a_name)}</span><b>${pts(d.a_id)}</b></div>
+      <span class="hand" style="font-size:30px">VS</span>
+      <div class="p">${d.b_id ? avatar(d.b_face, 'happy') : `<div style="width:68px;height:68px;border-radius:50%;border:1.5px dashed var(--line)"></div>`}<span>${amB ? 'Tú' : d.b_id ? esc(d.b_name) : 'Esperando…'}</span><b>${d.b_id ? pts(d.b_id) : '—'}</b></div></div>
+    ${shareRow()}
+    ${action}
+    ${hist ? `<div class="rows hist"><div class="label" style="padding-bottom:6px">Historial</div>${hist}</div>` : ''}
+  </section>`;
+  bindShare(url, `Te reto a un duelo de ahorcado en español: ${fmtCode(d.id)}`);
+  bind({ '[data-back]': goHome,
+    '[data-guess]': () => puzzle({ item: [last.es, last.en], tries: wordTries(last.es), title: 'DUELO', sub: 'Palabra de ' + esc(last.setter_name), label: 'Duelo', next: 'Guardar',
+      onQuit: () => openDuel(d.id),
+      onDone: async r => { loading('GUARDANDO…');
+        try { await DB.update('duel_turns', last.id, { solver_id: PID, solver_name: me.name, solved: r.solved, miss: r.miss, pts: r.pts, answered_at: new Date().toISOString() }); }
+        catch (e){ failView(dbErr(e), () => openDuel(d.id)); return; }
+        R.duelWrite = true; openDuel(d.id); } }),
+    '[data-write]': () => writeDuelWord(d) });
+  if (R.duelWrite && action.includes('data-write')){ R.duelWrite = false; writeDuelWord(d); }
+}
+function writeDuelWord(d){
+  const other = d.a_id === PID ? (d.b_name || 'tu amigo') : d.a_name;
+  R.view = 'duelWrite';
+  app.innerHTML = `<section class="screen"><div class="top"><button class="ring" data-back aria-label="Volver al duelo">${ICON.back}</button><span style="font-size:18px">Duelo ${esc(fmtCode(d.id))}</span><span style="width:44px"></span></div>
+    ${wordForm('TE TOCA<br>A TI', `Escribe una palabra o frase en español para ${esc(other)}, con una pista en inglés.`, 'Enviar palabra')}</section>`;
+  bindRandomWord();
+  bind({ '[data-back]': () => openDuel(d.id), '[data-send]': async () => {
+    const w = readWordForm(); if (!w) return; loading('ENVIANDO…');
+    try { await DB.insert('duel_turns', { duel_id: d.id, setter_id: PID, setter_name: me.name, es: w.es, en: w.en }); }
+    catch (e){ failView(dbErr(e), () => openDuel(d.id)); return; }
+    toast('Enviada. Avisa a ' + other + ' con el enlace.'); openDuel(d.id);
+  } });
+}
+
+/* ---------- Palabra del día: one word a day, scored within your group ---------- */
+let GROUP = store.get('ahorcado-group', null);
+const dayKey = (t = new Date()) => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+const MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function dailyItem(day){
+  const pool = [...BANK.palabra[0], ...BANK.palabra[1], ...BANK.varias[0], ...BANK.varias[1], ...BANK.frase[0], ...BANK.palabra[2], ...BANK.varias[2]];
+  let h = 2166136261; for (const c of 'ahorcado' + day){ h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return pool[h % pool.length];
+}
+const dailyHist = () => store.get('ahorcado-daily-' + PID, {});
+const playedToday = () => !!dailyHist()[dayKey()];
+function streak(){ const h = dailyHist(); let n = 0, t = new Date(); if (!h[dayKey(t)]) t.setDate(t.getDate() - 1);
+  while (h[dayKey(t)] && h[dayKey(t)].solved){ n++; t.setDate(t.getDate() - 1); } return n; }
+function openDaily(){ if (!GROUP){ GROUP = asyncCode(); store.set('ahorcado-group', GROUP); } R.view = 'daily'; R.dailyData = null; setURL('grupo=' + GROUP); render(); }
+async function dailyView(){
+  const day = dayKey(); if (!R.dailyData) loading();
+  try {
+    const res = await DB.list2('daily_results', 'day', day, 'group_code', GROUP);
+    if (R.view !== 'daily') return;
+    R.dailyData = res; drawDaily(day, res);
+  } catch (e){ failView(dbErr(e), () => render()); }
+}
+function drawDaily(day, res){
+  const [y, m, dd] = day.split('-').map(Number), item = dailyItem(day), hist = dailyHist();
+  const mine = hist[day] || (() => { const r = res.find(x => x.player_id === PID); return r && { solved: r.solved, pts: r.score, miss: r.miss }; })();
+  const rows = res.slice().sort((a, b) => b.score - a.score);
+  const tomorrow = new Date(y, m - 1, dd + 1).getTime(), url = SITE + '?grupo=' + GROUP;
+  const myText = mine ? `AHORCADO · Palabra del día ${dd} ${MONTHS[m - 1]}\n${mine.solved ? '■' : '□'} ${mine.miss} ${mine.miss === 1 ? 'fallo' : 'fallos'} · ${mine.pts} pts · racha ${streak()}\n${url}` : '';
+  app.innerHTML = `<section class="screen">
+    <div class="top">${backBtn('Volver al inicio')}<span class="label">${dd} de ${MONTHS[m - 1]}</span><span style="width:44px"></span></div>
+    <h2 class="display" style="font-size:60px">LA PALABRA<br>DEL DÍA</h2>
+    <div class="tags" style="justify-content:flex-start"><span>Racha: ${streak()} ${streak() === 1 ? 'día' : 'días'}</span><span>Grupo ${esc(fmtCode(GROUP))}</span><span>${res.length} ${res.length === 1 ? 'ha jugado' : 'han jugado'} hoy</span></div>
+    ${mine ? `<div class="note"><span class="label">Tu resultado de hoy</span><p style="font-size:24px;font-weight:300">${esc(item[0])} <span style="font-size:15px;color:var(--muted)">· ${esc(item[1])}</span></p>
+        <p>${mine.solved ? '¡Resuelta!' : 'No salió.'} ${mine.miss} ${mine.miss === 1 ? 'fallo' : 'fallos'} · <b>${mine.pts} pts</b></p>
+        <p style="color:var(--muted)">Nueva palabra en <span data-until="${tomorrow}" data-fmt="long">${longTime((tomorrow - Date.now()) / 1000)}</span></p></div>`
+      : `<p style="margin:0;color:var(--muted);line-height:1.45">Una palabra al día, la misma para todo tu grupo. Tienes un solo intento.</p>`}
+    <div class="rows lb"><div class="label" style="padding-bottom:6px">Hoy en tu grupo</div>
+      ${rows.length ? rows.map((r, i) => `<div class="r"><span class="rk">${i + 1}</span>${avatar(r.face, r.solved ? 'happy' : 'sad')}<div class="who"><b>${r.player_id === PID ? 'Tú' : esc(r.player_name)}</b><span>${r.solved ? 'Resuelta' : 'No salió'} · ${r.miss} ${r.miss === 1 ? 'fallo' : 'fallos'}</span></div><span class="tot">${r.score}</span></div>`).join('')
+        : `<div class="r"><div class="who"><b>Nadie ha jugado hoy todavía</b><span>Invita a tu grupo con el enlace.</span></div></div>`}</div>
+    <span class="label" style="text-align:center">Invita a tu grupo</span>${shareRow()}
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:10px">
+      ${mine ? `<button class="pill solid" data-share-res>Compartir mi resultado</button>` : `<button class="pill solid" data-play>Jugar la de hoy</button>`}</div></section>`;
+  bindShare(url, `Juega conmigo la palabra del día en español. Grupo ${fmtCode(GROUP)}`);
+  bind({ '[data-back]': goHome,
+    '[data-share-res]': () => navigator.share ? navigator.share({ title: 'Ahorcado', text: myText }).catch(() => {}) : copyText(myText, 'Resultado copiado'),
+    '[data-play]': () => puzzle({ item, tries: wordTries(item[0]), title: 'PALABRA DEL DÍA', sub: `${dd} ${MONTHS[m - 1].slice(0, 3)}`, label: 'Un solo intento', next: 'Ver el grupo',
+      onQuit: () => openDaily(),
+      onDone: async r => {
+        const h = dailyHist(); h[day] = { solved: r.solved, pts: r.pts, miss: r.miss }; store.set('ahorcado-daily-' + PID, h);
+        loading('GUARDANDO…');
+        try { await DB.insert('daily_results', { day, group_code: GROUP, player_id: PID, player_name: me.name, face: me.face, score: r.pts, solved: r.solved, miss: r.miss }); }
+        catch (e){ if (e.code !== '23505'){ failView(dbErr(e), () => openDaily()); return; } }
+        openDaily(); } }) });
+}
+
+// keep leaderboards fresh while they are on screen (never while someone is typing)
+setInterval(() => {
+  if (document.visibilityState !== 'visible' || app.querySelector('input')) return;
+  if (R.view === 'reto' && R.retoData) retoView(); else if (R.view === 'duel' && R.duelData) duelView(); else if (R.view === 'daily' && R.dailyData) dailyView();
+}, 15000);
+
 /* ===================== boot ===================== */
-const startCode = normCode(params.get('sala'));
-if (startCode){ R.pendingJoin = startCode; needName(() => { R.view = 'join'; render(); }); }
-render();
+const startCode = normCode(params.get('sala')), linkReto = normCode(params.get('reto')), linkDuel = normCode(params.get('duelo')), linkGroup = normCode(params.get('grupo'));
+if (linkReto) needName(() => openReto(linkReto));
+else if (linkDuel) needName(() => openDuel(linkDuel));
+else if (linkGroup){ if (linkGroup !== GROUP){ GROUP = linkGroup; store.set('ahorcado-group', GROUP); setTimeout(() => toast('Estás en el grupo ' + fmtCode(GROUP)), 300); } needName(() => openDaily()); }
+else if (startCode){ R.pendingJoin = startCode; needName(() => { R.view = 'join'; render(); }); }
+if (!['reto', 'duel', 'daily'].includes(R.view)) render();
 addEventListener('pagehide', () => { if (R.net) R.net.leave(); });
 </script>
 </body>
