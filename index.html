@@ -118,6 +118,10 @@ a{color:var(--fg)}
 .mcard{display:flex;flex-direction:column;align-items:flex-start;gap:5px;padding:14px;border-radius:22px;border:1.5px solid var(--faint);text-align:left;background:linear-gradient(180deg,#151515,#0a0a0a);min-width:0}
 .mcard b{font-family:var(--display);font-weight:400;font-size:25px;line-height:1;letter-spacing:.3px}
 .mcard span{font-size:13px;color:var(--muted);line-height:1.3}
+.installbar{display:flex;align-items:center;border:1.5px dashed var(--line);border-radius:18px;flex:none}
+.installbar [data-install]{flex:1;display:flex;align-items:center;gap:12px;padding:10px 14px;text-align:left}
+.installbar span{display:flex;flex-direction:column;gap:1px}.installbar b{font-weight:500;font-size:15px}.installbar small{font-size:12px;color:var(--muted)}
+.installbar [data-hideinstall]{width:44px;height:44px;font-size:22px;color:var(--muted)}
 .mcard.live{background:var(--fg);color:#000;border-color:var(--fg)}
 .mcard.live span{color:rgba(0,0,0,.66)}
 .mine{display:flex;flex-direction:column;flex:none}
@@ -394,8 +398,43 @@ function longTime(s){ const d = Math.floor(s/86400), h = Math.floor(s%86400/3600
 
 /* ===================== screens ===================== */
 const app = $('#app');
+
+/* ---------- installing on the phone's home screen ---------- */
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const INSTALLED = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+let installEvt = null;   // Android/Chrome hands us an install prompt we can trigger from a button
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (R.view === 'home') render(); });
+addEventListener('appinstalled', () => { installEvt = null; if (R.view === 'install' || R.view === 'home'){ R.view = 'home'; render(); } });
+function canInstall(){ return !INSTALLED && !LOCAL && (IOS || !!installEvt); }
+const sess = { get(k){ try { return sessionStorage.getItem(k); } catch(e){ return null; } }, set(k, v){ try { sessionStorage.setItem(k, v); } catch(e){} } };
+const SHARE_GLYPH = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-5px"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M6 11H5v9h14v-9h-1"/></svg>';
+const PLUS_GLYPH = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="vertical-align:-5px"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg>';
+function installView(){
+  const code = R.installCode, cont = R.afterInstall;
+  const step = (n, html) => `<div style="display:flex;gap:12px;align-items:flex-start"><span class="display" style="font-size:26px;line-height:1;min-width:20px">${n}</span><span style="font-size:16px;line-height:1.38;padding-top:2px">${html}</span></div>`;
+  app.innerHTML = `<section class="screen">
+    <div class="top">${cont ? '<span style="width:44px"></span>' : backBtn()}<span style="font-size:18px">Instalar</span><span style="width:44px"></span></div>
+    <h2 class="display" style="font-size:46px;margin:0">PONLO EN TU<br>PANTALLA</h2>
+    <p style="margin:0;color:var(--muted);line-height:1.45">Así Ahorcado se abre como una app, a pantalla completa, y guarda tus partidas.</p>
+    ${IOS ? `<div style="display:flex;flex-direction:column;gap:12px">
+        ${step(1, `Toca ${SHARE_GLYPH} <b>Compartir</b> en Safari. <span style="color:var(--muted)">(Si no lo ves, toca primero <b>···</b>)</span>`)}
+        ${step(2, `Elige ${PLUS_GLYPH} <b>Añadir a pantalla de inicio</b>.`)}
+        ${step(3, `Abre <b>Ahorcado</b> desde tu pantalla de inicio.`)}
+        ${code ? step(4, `Toca <b>Unirse con código</b> y escribe <b class="display" style="font-weight:400;font-size:22px;letter-spacing:.5px">${fmtCode(code)}</b>.`) : ''}
+      </div>
+      ${code ? `<button class="chip" data-copycode style="align-self:flex-start;display:flex;gap:8px;align-items:center">${ICON.copy}Copiar el código</button>` : ''}`
+    : `<button class="pill solid" data-prompt>Instalar Ahorcado</button>`}
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px;flex:none">
+      ${cont ? `<button class="link" data-here>Jugar aquí sin instalar</button>` : ''}</div></section>`;
+  bind({ '[data-back]': () => { R.view = 'home'; render(); },
+         '[data-copycode]': () => copyText(fmtCode(code), 'Código copiado'),
+         '[data-prompt]': async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; R.view = 'home'; render(); },
+         '[data-here]': () => { sess.set('ahorcado-safari', '1'); R.afterInstall = null; R.view = 'home'; cont(); } });
+}
+
 function render(){
   const v = R.view;
+  if (v === 'install') return installView();
   if (v === 'home') return homeView();
   if (v === 'name') return nameView();
   if (v === 'create') return createView();
@@ -423,6 +462,7 @@ function homeView(){
       <button class="mcard" data-go="duelNew"><b>DUELO</b><span>Os ponéis palabras por turnos</span></button>
       <button class="mcard" data-go="daily"><b>PALABRA DEL DÍA</b><span>${playedToday() ? 'Hoy ya jugaste ✓' : 'Una al día, con tu grupo'}</span></button>
     </div>
+    ${canInstall() && !store.get('ahorcado-hide-install', false) ? `<div class="installbar"><button data-install>${PLUS_GLYPH}<span><b>Instala la app</b><small>Juega desde tu pantalla de inicio</small></span></button><button data-hideinstall aria-label="Ocultar">×</button></div>` : ''}
     <div style="display:flex;flex-direction:column;gap:6px;flex:none">
       <button class="pill ghost" data-go="join">Unirse con código</button>
       <button class="link" data-go="solo">Practicar solo</button>
@@ -431,7 +471,9 @@ function homeView(){
   fitWordmark();
   bind({ '[data-go]': el => needName(() => { const g = el.dataset.go; if (g==='solo'){ R.soloSetup = true; R.view = 'create'; } else if (g === 'daily'){ openDaily(); return; } else { R.soloSetup = false; R.view = g; } render(); }),
          '[data-mine]': el => needName(() => { const [t, id] = el.dataset.mine.split(':'); t === 'reto' ? openReto(id) : openDuel(id); }),
-         '[data-profile]': () => { R.afterName = () => { R.view = 'home'; render(); }; R.view = 'name'; render(); } });
+         '[data-profile]': () => { R.afterName = () => { R.view = 'home'; render(); }; R.view = 'name'; render(); },
+         '[data-install]': () => { R.installCode = null; R.afterInstall = null; R.view = 'install'; render(); },
+         '[data-hideinstall]': () => { store.set('ahorcado-hide-install', true); render(); } });
 }
 // shrink the big AHORCADO until it fits the screen width, whichever font the phone ended up using
 function fitWordmark(){
@@ -486,14 +528,24 @@ function joinView(){
     <div class="top">${backBtn()}<span style="font-size:18px">Unirse</span><span style="width:44px"></span></div>
     <h2 class="display" style="font-size:54px">ESCRIBE<br>EL CÓDIGO</h2>
     <div class="field"><label class="label" for="code">Código</label><input class="input" id="code" autocomplete="off" autocapitalize="characters" placeholder="TACO·42" value="${esc(R.pendingJoin ? fmtCode(R.pendingJoin) : '')}" style="font-family:var(--display);font-size:30px;letter-spacing:1px;height:68px"></div>
-    <span style="font-size:14px;color:var(--muted)">Sirve para salas en vivo, retos y duelos. Pide el código a quien lo creó, o abre el enlace que te mandó.</span>
+    <span style="font-size:14px;color:var(--muted)">Sirve para salas en vivo, retos, duelos y grupos de la palabra del día. También puedes pegar el enlace que te mandaron.</span>
+    ${navigator.clipboard && navigator.clipboard.readText ? `<button class="chip" data-paste style="align-self:flex-start;display:flex;gap:8px;align-items:center">${ICON.copy}Pegar enlace</button>` : ''}
     <button class="pill solid" id="go" style="margin-top:auto">Entrar</button></section>`;
   const inp = $('#code'); if (!R.pendingJoin) inp.focus();
-  const go = async () => { const c = normCode(inp.value); if (c.length < 3){ toast('Escribe el código'); inp.focus(); return; } R.pendingJoin = null;
-    // a code can be a challenge, a duel or a live room
-    try { if (await DB.get('challenges', c)) return openReto(c); if (await DB.get('duels', c)) return openDuel(c); } catch(e){}
+  const go = async () => { const raw = inp.value.trim(); R.pendingJoin = null;
+    // a pasted invite link: ...?reto=X / ?duelo=X / ?grupo=X / ?sala=X
+    const m = raw.match(/[?&](sala|reto|duelo|grupo)=([A-Za-z0-9·]+)/);
+    if (m){ const c = normCode(m[2]);
+      if (m[1] === 'reto') return openReto(c); if (m[1] === 'duelo') return openDuel(c);
+      if (m[1] === 'grupo') return joinGroup(c); return enterRoom(c, null); }
+    const c = normCode(raw); if (c.length < 3){ toast('Escribe el código'); inp.focus(); return; }
+    // a code can be a challenge, a duel, a daily-word group or a live room
+    loading('BUSCANDO…');
+    try { if (await DB.get('challenges', c)) return openReto(c); if (await DB.get('duels', c)) return openDuel(c);
+          if ((await DB.list('daily_results', 'group_code', c)).length) return joinGroup(c); } catch(e){}
     enterRoom(c, null); };
-  bind({ '[data-back]': () => { R.pendingJoin = null; R.view='home'; render(); }, '#go': go });
+  bind({ '[data-back]': () => { R.pendingJoin = null; R.view='home'; render(); }, '#go': go,
+         '[data-paste]': () => navigator.clipboard.readText().then(t => { inp.value = t.trim(); go(); }).catch(() => toast('No se pudo pegar')) });
   inp.onkeydown = e => { if (e.key === 'Enter') go(); };
 }
 
@@ -938,6 +990,7 @@ const dailyHist = () => store.get('ahorcado-daily-' + PID, {});
 const playedToday = () => !!dailyHist()[dayKey()];
 function streak(){ const h = dailyHist(); let n = 0, t = new Date(); if (!h[dayKey(t)]) t.setDate(t.getDate() - 1);
   while (h[dayKey(t)] && h[dayKey(t)].solved){ n++; t.setDate(t.getDate() - 1); } return n; }
+function joinGroup(c){ if (c !== GROUP){ GROUP = c; store.set('ahorcado-group', GROUP); setTimeout(() => toast('Estás en el grupo ' + fmtCode(GROUP)), 300); } openDaily(); }
 function openDaily(){ if (!GROUP){ GROUP = asyncCode(); store.set('ahorcado-group', GROUP); } R.view = 'daily'; R.dailyData = null; setURL('grupo=' + GROUP); render(); }
 async function dailyView(){
   const day = dayKey(); if (!R.dailyData) loading();
@@ -988,12 +1041,23 @@ setInterval(() => {
 
 /* ===================== boot ===================== */
 const startCode = normCode(params.get('sala')), linkReto = normCode(params.get('reto')), linkDuel = normCode(params.get('duelo')), linkGroup = normCode(params.get('grupo'));
-if (linkReto) needName(() => openReto(linkReto));
-else if (linkDuel) needName(() => openDuel(linkDuel));
-else if (linkGroup){ if (linkGroup !== GROUP){ GROUP = linkGroup; store.set('ahorcado-group', GROUP); setTimeout(() => toast('Estás en el grupo ' + fmtCode(GROUP)), 300); } needName(() => openDaily()); }
-else if (startCode){ R.pendingJoin = startCode; needName(() => { R.view = 'join'; render(); }); }
-if (!['reto', 'duel', 'daily'].includes(R.view)) render();
+const linkCode = linkReto || linkDuel || linkGroup || startCode;
+function followLink(){
+  if (linkReto) needName(() => openReto(linkReto));
+  else if (linkDuel) needName(() => openDuel(linkDuel));
+  else if (linkGroup) needName(() => joinGroup(linkGroup));
+  else if (startCode){ R.pendingJoin = startCode; needName(() => { R.view = 'join'; render(); }); }
+  else { R.view = 'home'; render(); }
+  if (!['reto', 'duel', 'daily'].includes(R.view)) render();
+}
+// An invite opened in iPhone Safari: offer to install first. Safari and the home-screen app keep separate
+// memories on iPhone, so joining here and installing later would leave the game behind in Safari.
+if (linkCode && IOS && canInstall() && !sess.get('ahorcado-safari')){ R.installCode = linkCode; R.afterInstall = followLink; R.view = 'install'; render(); }
+else followLink();
 addEventListener('pagehide', () => { if (R.net) R.net.leave(); });
+
+// Offline shell: the game opens instantly and practice works without signal
+if ('serviceWorker' in navigator && !LOCAL && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
 </html>

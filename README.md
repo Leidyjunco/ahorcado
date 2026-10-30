@@ -12,6 +12,15 @@ El juego del ahorcado en español, para jugar con amigos, en vivo o cada uno a s
 
 **Unirse con código** accepts any live room, reto or duelo code. Links work too: `?sala=`, `?reto=`, `?duelo=`, `?grupo=`.
 
+## Install it on your phone
+
+- **iPhone:** open the site in Safari, tap **Share** (on newer iOS, tap **···** first), then **Add to Home Screen**.
+- **Android:** tap **Instala la app** on the home screen, or use Chrome's **Install app**.
+
+After that, Ahorcado opens full screen from its own icon and loads even without signal; Practicar solo works offline.
+
+On iPhone, Safari and the home-screen app keep separate saved data. So when an invite link opens in Safari, the game first offers to install, and shows the code to type into the app under **Unirse con código**. That box also accepts a pasted invite link.
+
 ## Live room settings
 
 - **Levels:** Fácil (8 tries), Medio (6) or Difícil (5).

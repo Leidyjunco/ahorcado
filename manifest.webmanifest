@@ -1,7 +1,8 @@
 {
+ "id": "./",
  "name": "Ahorcado",
  "short_name": "Ahorcado",
- "description": "El juego del ahorcado en español, en vivo con amigos.",
+ "description": "El juego del ahorcado en español, con amigos: en vivo, retos, duelos y la palabra del día.",
  "start_url": "./",
  "scope": "./",
  "display": "standalone",
