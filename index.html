@@ -127,7 +127,11 @@ a{color:var(--fg)}
 .mine{display:flex;flex-direction:column;flex:none}
 .mine button{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 2px;border-top:1px solid var(--faint);text-align:left;font-size:15px}
 .mine button span:last-child{color:var(--muted);font-size:13px;white-space:nowrap}
-.inbox button{justify-content:flex-start}
+.inbox .row{display:flex;align-items:center;gap:8px;border-top:1px solid var(--faint)}
+.inbox .row > button[data-mine]{flex:1;min-width:0;border-top:0;justify-content:flex-start}
+.inbox .edit{border:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg);padding:4px 2px}
+.inbox .drop{flex:none;padding:8px 14px;border:1.5px solid var(--line);border-radius:999px;font-size:13px;white-space:nowrap}
+.inbox .drop.sure{background:var(--fg);color:#000;border-color:var(--fg)}
 .inbox .av{width:38px;height:38px;flex:none;display:block}.inbox .av svg{width:100%;height:100%}
 .inbox .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .inbox .tx b{font-weight:400;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -462,6 +466,7 @@ function bind(map){ for (const [sel, fn] of Object.entries(map)) app.querySelect
 const backBtn = (label='Volver') => `<button class="ring" data-back aria-label="${label}">${ICON.back}</button>`;
 
 function homeView(quiet){
+  if (!quiet){ R.editInbox = false; R.dropSure = null; }
   const hotFirst = !!R.inbox?.items?.some(x => x.hot);
   if (!quiet && me.name){ ensurePlayer(); setTimeout(() => refreshHome(), 0); }
   app.innerHTML = `<section class="screen">
@@ -485,7 +490,9 @@ function homeView(quiet){
     ${hotFirst ? '' : inboxList()}</section>`;
   fitWordmark();
   bind({ '[data-go]': el => needName(() => { const g = el.dataset.go; if (g==='solo'){ R.soloSetup = true; R.view = 'create'; } else if (g === 'daily'){ openDaily(); return; } else { R.soloSetup = false; R.view = g; } render(); }),
-         '[data-mine]': el => needName(() => { const [t, id] = el.dataset.mine.split(':'); t === 'reto' ? openReto(id) : openDuel(id); }),
+         '[data-mine]': el => { if (R.editInbox) return; needName(() => { const [t, id] = el.dataset.mine.split(':'); t === 'reto' ? openReto(id) : openDuel(id); }); },
+         '[data-edit]': () => { R.editInbox = !R.editInbox; R.dropSure = null; const sc = app.querySelector('.screen')?.scrollTop || 0; homeView(true); app.querySelector('.screen').scrollTop = sc; },
+         '[data-drop]': el => { const k = el.dataset.drop; if (R.dropSure === k){ el.disabled = true; dropItem(k); return; } R.dropSure = k; const sc = app.querySelector('.screen')?.scrollTop || 0; homeView(true); app.querySelector('.screen').scrollTop = sc; },
          '[data-profile]': () => { R.afterName = () => { R.view = 'home'; render(); }; R.view = 'name'; render(); },
          '[data-friends]': () => friendsView(),
          '[data-install]': () => { R.installCode = null; R.afterInstall = null; R.view = 'install'; render(); },
@@ -914,15 +921,18 @@ function readWordForm(){
 function bindRandomWord(){ bind({ '[data-rand]': () => { const k = rnd(['palabra', 'palabra', 'varias']), it = rnd(BANK[k][rnd([0, 1, 1, 2])]); $('#es').value = it[0]; $('#en').value = it[1]; } }); }
 function duelNewView(){
   const fr = friendList(); if (R.duelTo === undefined) R.duelTo = fr.length ? null : 'link';
+  const open = R.duelTo && R.duelTo !== 'link' ? (R.inbox?.items || []).find(x => x.type === 'duelo' && x.with === R.duelTo) : null;
   const picker = `<div class="field"><span class="label">Para</span><div class="pick">
       ${fr.map(f => `<button class="chip" data-to="${esc(f.id)}" aria-pressed="${R.duelTo === f.id}"><span class="av">${avatar(f.face || 0, 'happy')}</span>${esc(f.name)}</button>`).join('')}
       <button class="chip" data-to="link" aria-pressed="${R.duelTo === 'link'}">${ICON.share} Con enlace</button></div>
-      <span style="font-size:13px;color:var(--muted)">${R.duelTo === 'link' ? 'Te daremos un enlace para mandárselo a quien quieras.' : fr.length ? 'Le aparecerá en su app, sin enlaces.' : ''}</span></div>`;
+      <span style="font-size:13px;color:var(--muted)">${R.duelTo === 'link' ? 'Te daremos un enlace para mandárselo a quien quieras.' : fr.length ? 'Le aparecerá en su app, sin enlaces.' : ''}</span>
+      ${open ? `<div class="note" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px"><span style="font-size:14px">Ya tenéis un duelo abierto.</span><button class="chip" data-open-duel="${esc(open.id)}">Abrirlo</button></div>` : ''}</div>`;
   app.innerHTML = `<section class="screen"><div class="top">${backBtn()}<span style="font-size:18px">Nuevo duelo</span><span style="width:44px"></span></div>
     ${wordForm('PON LA<br>PRIMERA', 'Escribe una palabra o frase en español, con una pista en inglés. Cuando la adivine, te pondrá una a ti.', 'Crear duelo', picker)}</section>`;
   if (R.duelWord){ $('#es').value = R.duelWord.es; $('#en').value = R.duelWord.en; R.duelWord = null; }
   bindRandomWord();
   bind({ '[data-back]': () => { R.duelTo = undefined; goHome(); },
+    '[data-open-duel]': el => { R.duelTo = undefined; openDuel(el.dataset.openDuel); },
     '[data-to]': el => { R.duelWord = { es: $('#es').value, en: $('#en').value }; R.duelTo = el.dataset.to; duelNewView(); },
     '[data-send]': async () => {
     const w = readWordForm(); if (!w) return;
@@ -958,7 +968,8 @@ function drawDuel(d, turns){
   const pts = id => turns.filter(t => t.solver_id === id).reduce((a, t) => a + (t.pts || 0), 0);
   const last = turns[turns.length - 1], url = SITE + '?duelo=' + d.id;
   let action = '';
-  if (!inDuel) action = `<div class="note"><p>Este duelo es entre ${esc(d.a_name)} y ${esc(d.b_name)}. Crea el tuyo desde el inicio.</p></div>`;
+  if (d.ended_at) action = `<div class="note"><span class="label">Duelo terminado</span><p>${d.ended_by === PID ? 'Terminaste' : esc(d.ended_by === d.a_id ? d.a_name : d.b_name) + ' terminó'} este duelo. Puedes empezar otro desde el inicio.</p></div>`;
+  else if (!inDuel) action = `<div class="note"><p>Este duelo es entre ${esc(d.a_name)} y ${esc(d.b_name)}. Crea el tuyo desde el inicio.</p></div>`;
   else if (last && !last.answered_at){
     action = last.setter_id === PID
       ? `<div class="note"><span class="label">Esperando</span><p>Le pusiste <b>“${esc(last.es)}”</b> a ${esc(other)}. Cuando la adivine, te tocará a ti.</p>${d.b_id ? '' : '<p style="color:var(--muted)">Mándale el enlace para que empiece.</p>'}</div>`
@@ -981,9 +992,10 @@ function drawDuel(d, turns){
     <div class="vs"><div class="p">${avatar(d.a_face, 'happy')}<span>${amA ? 'Tú' : esc(d.a_name)}</span><b>${pts(d.a_id)}</b></div>
       <span class="hand" style="font-size:30px">VS</span>
       <div class="p">${d.b_id ? avatar(d.b_face, 'happy') : `<div style="width:68px;height:68px;border-radius:50%;border:1.5px dashed var(--line)"></div>`}<span>${amB ? 'Tú' : d.b_id ? esc(d.b_name) : 'Esperando…'}</span><b>${d.b_id ? pts(d.b_id) : '—'}</b></div></div>
-    ${d.b_id ? '' : shareRow()}
+    ${d.b_id || d.ended_at ? '' : shareRow()}
     ${action}
     ${hist ? `<div class="rows hist"><div class="label" style="padding-bottom:6px">Historial</div>${hist}</div>` : ''}
+    ${inDuel && !d.ended_at ? `<button class="link" data-end style="align-self:center;color:var(--muted)">${R.endSure === d.id ? '¿Seguro? Se cerrará para los dos · Terminar' : 'Terminar duelo'}</button>` : ''}
   </section>`;
   bindShare(url, `Te reto a un duelo de ahorcado en español: ${fmtCode(d.id)}`);
   bind({ '[data-back]': goHome,
@@ -993,7 +1005,10 @@ function drawDuel(d, turns){
         try { await DB.update('duel_turns', last.id, { solver_id: PID, solver_name: me.name, solved: r.solved, miss: r.miss, pts: r.pts, answered_at: new Date().toISOString() }); }
         catch (e){ failView(dbErr(e), () => openDuel(d.id)); return; }
         inboxAt = 0; R.duelWrite = true; openDuel(d.id); } }),
-    '[data-write]': () => writeDuelWord(d) });
+    '[data-write]': () => writeDuelWord(d),
+    '[data-end]': async el => { if (R.endSure !== d.id){ R.endSure = d.id; drawDuel(d, turns); return; }
+      R.endSure = null; el.disabled = true;
+      try { await endDuel(d.id); inboxAt = 0; toast('Duelo terminado'); goHome(); } catch (e){ toast(e.message && !e.code ? e.message : dbErr(e)); el.disabled = false; } } });
   if (R.duelWrite && action.includes('data-write')){ R.duelWrite = false; writeDuelWord(d); }
 }
 function writeDuelWord(d){
@@ -1058,7 +1073,9 @@ async function loadInbox(force){
     const [byFriends, mineR] = await Promise.all([DB.listIn('challenges', 'creator_id', [...friends.keys(), PID]), DB.listIn('challenges', 'id', known)]);
     const played = new Map(myRes.map(r => [r.challenge_id, r]));
     const now = Date.now(), items = [];
+    const hidden = new Set(store.get('ahorcado-hidden-' + PID, []));
     for (const d of duels){
+      if (d.ended_at || hidden.has(d.id)) continue;
       const ts = turns.filter(t => t.duel_id === d.id).sort((x, y) => (x.created_at < y.created_at ? -1 : 1)), last = ts[ts.length - 1];
       const o = opp(d), who = o ? o.name : 'tu amigo';
       let status, hot = false;
@@ -1066,10 +1083,10 @@ async function loadInbox(force){
       else if (last && !last.answered_at){ if (last.setter_id === PID) status = 'Esperando a ' + who; else { status = 'Te toca adivinar'; hot = true; } }
       else if ((last ? last.solver_id : d.a_id) === PID){ status = 'Te toca poner palabra'; hot = true; }
       else status = who + ' está eligiendo';
-      items.push({ type: 'duelo', id: d.id, title: 'Duelo con ' + who, face: o ? o.face : 0, status, hot, at: Date.parse((last || d).created_at) });
+      items.push({ type: 'duelo', id: d.id, with: o ? o.id : null, title: 'Duelo con ' + who, face: o ? o.face : 0, status, hot, at: Date.parse((last || d).created_at) });
     }
     const seen = new Set();
-    for (const c of [...byFriends, ...mineR]){ if (seen.has(c.id)) continue; seen.add(c.id);
+    for (const c of [...byFriends, ...mineR]){ if (seen.has(c.id) || hidden.has(c.id)) continue; seen.add(c.id);
       const ended = now > Date.parse(c.expires_at), mineC = c.creator_id === PID, res = played.get(c.id);
       if (ended && !res && !mineC) continue;
       if (ended && now - Date.parse(c.expires_at) > 3 * 864e5) continue;
@@ -1087,15 +1104,35 @@ async function loadInbox(force){
 // fetch in the background and redraw the home screen only if something changed
 async function refreshHome(force){
   const before = JSON.stringify(R.inbox); await loadInbox(force);
-  if (R.view === 'home' && JSON.stringify(R.inbox) !== before){ const sc = app.querySelector('.screen')?.scrollTop || 0; homeView(true); const el = app.querySelector('.screen'); if (el) el.scrollTop = sc; }
+  if (R.view === 'home' && !R.editInbox && JSON.stringify(R.inbox) !== before){ const sc = app.querySelector('.screen')?.scrollTop || 0; homeView(true); const el = app.querySelector('.screen'); if (el) el.scrollTop = sc; }
 }
 addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && R.view === 'home') refreshHome(true); });
 function inboxList(){
   const items = R.inbox?.items; if (!items) return mineList();
   if (!items.length) return '';
   const n = items.filter(x => x.hot).length;
-  return `<div class="mine inbox"><span class="label" style="display:flex;justify-content:space-between;padding-bottom:6px"><span>Tus partidas</span>${n ? `<span class="badge">${n} te ${n === 1 ? 'espera' : 'esperan'}</span>` : ''}</span>
-    ${items.map(x => `<button data-mine="${x.type}:${esc(x.id)}"><span class="av">${avatar(x.face || 0, x.hot ? 'happy' : 'neutral')}</span><span class="tx"><b>${esc(x.title)}</b><small class="${x.hot ? 'hot' : ''}">${esc(x.status)}</small></span><span>${x.hot ? '●' : '›'}</span></button>`).join('')}</div>`;
+  const ed = R.editInbox;
+  return `<div class="mine inbox"><div class="label" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:6px"><span>Tus partidas</span>
+      <span style="display:flex;align-items:center;gap:10px">${n && !ed ? `<span class="badge">${n} te ${n === 1 ? 'espera' : 'esperan'}</span>` : ''}<button class="edit" data-edit>${ed ? 'Listo' : 'Editar'}</button></span></div>
+    ${items.map(x => { const key = x.type + ':' + x.id, sure = R.dropSure === key;
+      return `<div class="row"><button data-mine="${esc(key)}"><span class="av">${avatar(x.face || 0, x.hot ? 'happy' : 'neutral')}</span><span class="tx"><b>${esc(x.title)}</b><small class="${x.hot ? 'hot' : ''}">${esc(sure ? (x.type === 'duelo' ? 'Se cerrará para los dos' : 'Solo se quita de tu lista') : x.status)}</small></span>${ed ? '' : `<span>${x.hot ? '●' : '›'}</span>`}</button>
+        ${ed ? `<button class="drop${sure ? ' sure' : ''}" data-drop="${esc(key)}">${sure ? (x.type === 'duelo' ? 'Terminar' : 'Quitar') : 'Quitar'}</button>` : ''}</div>`; }).join('')}</div>`;
+}
+// Ending a duel closes it for both players; removing a reto only hides it from your own list
+async function endDuel(id){
+  const r = await DB.update('duels', id, { ended_at: new Date().toISOString(), ended_by: PID });
+  if (!r) throw { message: 'No se pudo terminar el duelo.' };
+}
+async function dropItem(key){
+  const [t, id] = key.split(':');
+  if (t === 'duelo'){ try { await endDuel(id); } catch (e){ toast(e.message && !e.code ? e.message : dbErr(e)); return; } }
+  else { const h = store.get('ahorcado-hidden-' + PID, []); h.push(id); store.set('ahorcado-hidden-' + PID, h.slice(-200));
+    store.set('ahorcado-mine', store.get('ahorcado-mine', []).filter(x => x.id !== id)); }
+  R.dropSure = null;
+  if (R.inbox){ R.inbox.items = R.inbox.items.filter(x => x.type + ':' + x.id !== key); store.set('ahorcado-inbox-' + PID, R.inbox); }
+  if (!R.inbox?.items?.length) R.editInbox = false;
+  const sc = app.querySelector('.screen')?.scrollTop || 0; homeView(true); const el = app.querySelector('.screen'); if (el) el.scrollTop = sc;
+  toast(t === 'duelo' ? 'Duelo terminado' : 'Quitado de tu lista'); inboxAt = 0;
 }
 
 function friendsView(){

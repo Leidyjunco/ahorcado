@@ -91,6 +91,10 @@ create table if not exists public.friends (
 );
 
 -- Finding a player's own games quickly
+-- Either player can end a duel; it then disappears from both players' lists
+alter table public.duels add column if not exists ended_at timestamptz;
+alter table public.duels add column if not exists ended_by text;
+
 create index if not exists duels_a_idx        on public.duels (a_id);
 create index if not exists duels_b_idx        on public.duels (b_id);
 create index if not exists friends_a_idx      on public.friends (a_id);
@@ -99,7 +103,7 @@ create index if not exists challenges_creator on public.challenges (creator_id);
 create index if not exists results_player     on public.results (player_id);
 
 -- Access rules: the app can read and add rows; a duel's second player can join once,
--- a duel turn can be answered once, and a player can change their name and face (never their code).
+-- a duel turn can be answered once, a duel can be ended once, and a player can change their name and face (never their code).
 -- Nothing can be deleted from the app.
 alter table public.challenges    enable row level security;
 alter table public.results       enable row level security;
@@ -122,6 +126,9 @@ end $$;
 
 drop policy if exists "join once" on public.duels;
 create policy "join once" on public.duels for update to anon, authenticated using (b_id is null) with check (true);
+
+drop policy if exists "end once" on public.duels;
+create policy "end once" on public.duels for update to anon, authenticated using (ended_at is null) with check (true);
 
 drop policy if exists "answer once" on public.duel_turns;
 create policy "answer once" on public.duel_turns for update to anon, authenticated using (answered_at is null) with check (true);
